@@ -1,7 +1,9 @@
-# Builds the downloads for a release tag (v1.6.0) and attaches them to a draft GitHub release.
-# This fork ships two: the Windows installer and the Android APK. The macOS apps, the Linux packages and the
-# unsigned iOS app are still here, and build when the workflow is started by hand with their names
-# (Actions → Release → Run workflow → "windows android mac linux ios").
+# Builds the downloads and attaches them to a draft GitHub release. Two ways to start it:
+#   - push a release tag (v1.6.0), or
+#   - Actions → Release → Run workflow, giving the tag to release as (it is created for you). Leave the tag
+#     empty to only build: the files are then kept with the run, as artifacts.
+# This fork ships two downloads: the Windows installer and the Android APK. The macOS apps, the Linux packages
+# and the unsigned iOS app are still here, and build when a manual run names them ("windows android mac linux ios").
 # The draft only goes public when it's published by hand, after checking it.
 #
 # The APK is signed with the key in these repository secrets (Settings → Secrets and variables → Actions):
@@ -18,6 +20,9 @@ on:
       platforms:
         description: "Systems to build, separated by spaces: windows android mac linux ios"
         default: "windows android"
+      release:
+        description: "Tag for a draft release with the files, e.g. v1.6.0 (empty: build only)"
+        default: ""
 
 permissions:
   contents: read
@@ -172,7 +177,7 @@ jobs:
   release:
     needs: [windows, mac, linux, android, ios]
     # Systems that weren't asked for don't hold the release back; one that failed does.
-    if: ${{ !cancelled() && !contains(needs.*.result, 'failure') && startsWith(github.ref, 'refs/tags/v') }}
+    if: ${{ !cancelled() && !contains(needs.*.result, 'failure') && (startsWith(github.ref, 'refs/tags/v') || inputs.release != '') }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -181,8 +186,20 @@ jobs:
         with:
           path: downloads
           merge-multiple: true
+      # A manual run has no tag yet: create it here, on the commit that was built. (Made with the workflow's own
+      # token, it doesn't start this workflow a second time.)
+      - name: Tag
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.release }}
+        run: |
+          case "$TAG" in v[0-9]*) ;; *) echo "::error::The release tag must look like v1.6.0, got '$TAG'"; exit 1 ;; esac
+          gh api "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$TAG" -f sha="$GITHUB_SHA" --silent \
+            || echo "::notice::Tag $TAG already exists: the release is attached to it as it is."
       - uses: softprops/action-gh-release@v3
         with:
+          tag_name: ${{ inputs.release || github.ref_name }}
           draft: true
           body: |
             Musike with offline downloads.
