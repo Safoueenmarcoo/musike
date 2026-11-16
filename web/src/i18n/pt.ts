@@ -432,7 +432,6 @@ export const pt: Messages = {
     removeConfirm: "Remover",
     retry: "Tentar baixar de novo",
     dismiss: "Dispensar",
-    failedFor: (title) => `O download falhou: ${title}`,
     summary: (n, size) => `${count(n, "música", "músicas")} · ${size}`,
     inProgress: "Baixando agora",
     notDownloadedTitle: "Não foi possível baixar",

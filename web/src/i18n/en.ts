@@ -438,7 +438,6 @@ export const en = {
     removeConfirm: "Remove",
     retry: "Try the download again",
     dismiss: "Dismiss",
-    failedFor: (title: string) => `Download failed: ${title}`,
     summary: (n: number, size: string) => `${count(n, "song", "songs")} · ${size}`,
     inProgress: "Downloading now",
     notDownloadedTitle: "Couldn't download",
