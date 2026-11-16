@@ -20,6 +20,8 @@ if (!app.requestSingleInstanceLock()) {
 // Everything the user owns lives in their profile, so updates and reinstalls keep it.
 const userData = app.getPath("userData");
 process.env.MUSIKE_DATA_DIR = path.join(userData, "data");
+// Songs downloaded for offline listening: next to the library, never inside the install folder.
+process.env.MUSIKE_DOWNLOADS_DIR = path.join(userData, "downloads");
 process.env.MUSIKE_CACHE_DIR = path.join(userData, "cache");
 process.env.MUSIKE_BIN_DIR = path.join(userData, "bin");
 process.env.MUSIKE_WEB_DIST = app.isPackaged ? path.join(process.resourcesPath, "web") : path.resolve(here, "..", "..", "web", "dist");

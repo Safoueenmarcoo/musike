@@ -1,4 +1,4 @@
-import { ClockCounterClockwiseIcon, HeartIcon, MagnifyingGlassIcon, PlayIcon } from "@phosphor-icons/react";
+import { ArrowCircleDownIcon, ClockCounterClockwiseIcon, HeartIcon, MagnifyingGlassIcon, PlayIcon } from "@phosphor-icons/react";
 import type { ReactNode } from "react";
 import { Link, useNavigate } from "react-router";
 import { Artwork } from "../components/Artwork";
@@ -6,11 +6,14 @@ import { LogoMark } from "../components/Brand";
 import { PageHeader, Section } from "../components/Page";
 import { TrackList, TrackListSkeleton } from "../components/TrackList";
 import { useT } from "../i18n";
+import { cn } from "../lib/format";
 import { paths } from "../lib/routes";
 import type { Track } from "../lib/types";
 import { usePlayer } from "../player/player";
 import { useAppearance } from "../stores/appearance";
+import { useDownloads, useUnavailable } from "../stores/downloads";
 import { useLibrary } from "../stores/library";
+import { toast } from "../stores/ui";
 
 function Shortcut({ to, label, tracks, cover }: { to: string; label: string; tracks: Track[]; cover: ReactNode }) {
   const playList = usePlayer((s) => s.playList);
@@ -35,10 +38,18 @@ function Shortcut({ to, label, tracks, cover }: { to: string; label: string; tra
 }
 
 function RecentCard({ track, onPlay }: { track: Track; onPlay: () => void }) {
+  // No internet and not downloaded: dimmed, and tapping it says why instead of failing to play.
+  const unavailable = useUnavailable(track.id);
+  const t = useT();
   return (
-    <button type="button" onClick={onPlay} className="group flex w-36 shrink-0 snap-start flex-col gap-2 text-left md:w-44">
+    <button
+      type="button"
+      onClick={() => (unavailable ? toast(t.downloads.toasts.offlineTrack(track.title), "error") : onPlay())}
+      title={unavailable ? t.downloads.notDownloaded : undefined}
+      className={cn("group flex w-36 shrink-0 snap-start flex-col gap-2 text-left md:w-44", unavailable && "opacity-45")}
+    >
       <span className="relative block">
-        <Artwork src={track.art} fallback={track.thumb} className="aspect-square w-full rounded-[14px]" />
+        <Artwork src={track.art} fallback={track.thumb} trackId={track.id} className="aspect-square w-full rounded-[14px]" />
         <span className="absolute right-2 bottom-2 grid size-11 translate-y-1 place-items-center rounded-full bg-accent text-accent-ink opacity-0 shadow-[0_8px_20px_rgb(0_0_0/0.4)] transition-[opacity,transform] duration-200 ease-out-expo group-hover:translate-y-0 group-hover:opacity-100 group-focus-visible:opacity-100">
           <PlayIcon size={20} weight="fill" />
         </span>
@@ -53,6 +64,7 @@ function RecentCard({ track, onPlay }: { track: Track; onPlay: () => void }) {
 
 export default function Home() {
   const { favorites, playlists, history, status } = useLibrary();
+  const downloads = useDownloads((s) => s.items);
   const playList = usePlayer((s) => s.playList);
   const navigate = useNavigate();
   const t = useT();
@@ -111,13 +123,25 @@ export default function Home() {
                 </span>
               }
             />
+            {downloads.length > 0 && (
+              <Shortcut
+                to={paths.downloads}
+                label={t.downloads.title}
+                tracks={downloads.map((d) => d.track)}
+                cover={
+                  <span className="grid size-full place-items-center bg-surface-3 text-accent-text">
+                    <ArrowCircleDownIcon size={24} weight="fill" />
+                  </span>
+                }
+              />
+            )}
             {playlists.slice(0, 6).map((p) => (
               <Shortcut
                 key={p.id}
                 to={paths.playlist(p.id)}
                 label={p.name}
                 tracks={p.tracks}
-                cover={<Artwork src={p.tracks[0]?.thumb} className="size-full" />}
+                cover={<Artwork src={p.tracks[0]?.thumb} trackId={p.tracks[0]?.id} className="size-full" />}
               />
             ))}
           </div>}

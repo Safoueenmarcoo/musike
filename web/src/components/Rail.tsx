@@ -1,4 +1,5 @@
 import {
+  ArrowCircleDownIcon,
   BooksIcon,
   ClockCounterClockwiseIcon,
   GearSixIcon,
@@ -10,9 +11,11 @@ import {
 import { useState, type ReactNode } from "react";
 import { NavLink, useNavigate } from "react-router";
 import { useT } from "../i18n";
+import { capabilities } from "../lib/api";
 import { cn } from "../lib/format";
 import { paths } from "../lib/routes";
 import { useAppearance } from "../stores/appearance";
+import { useDownloads } from "../stores/downloads";
 import { useLibrary } from "../stores/library";
 import { needsAttention, useSystem } from "../stores/system";
 import { useUi } from "../stores/ui";
@@ -97,6 +100,7 @@ export function Rail() {
   const sidebarPlaylists = useAppearance((s) => s.sidebarPlaylists);
   const playlists = useLibrary((s) => s.playlists);
   const favorites = useLibrary((s) => s.favorites);
+  const downloaded = useDownloads((s) => s.items.length);
   const createPlaylist = useLibrary((s) => s.createPlaylist);
   const navigate = useNavigate();
   const [creating, setCreating] = useState(false);
@@ -161,9 +165,16 @@ export function Rail() {
               <ClockCounterClockwiseIcon size={20} />
             </span>
           </RailLink>
+          {capabilities.downloads && (
+            <RailLink to={paths.downloads} label={t.downloads.title} sub={t.common.tracks(downloaded)}>
+              <span className="grid size-full place-items-center bg-surface-3 text-fg-2">
+                <ArrowCircleDownIcon size={20} />
+              </span>
+            </RailLink>
+          )}
           {sidebarPlaylists && playlists.map((p) => (
             <RailLink key={p.id} to={paths.playlist(p.id)} label={p.name} sub={t.common.tracks(p.tracks.length)}>
-              <Artwork src={p.tracks[0]?.thumb} className="size-full" iconSize={18} />
+              <Artwork src={p.tracks[0]?.thumb} trackId={p.tracks[0]?.id} className="size-full" iconSize={18} />
             </RailLink>
           ))}
         </div>

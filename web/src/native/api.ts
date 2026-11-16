@@ -11,13 +11,16 @@ import {
   genres,
   searchAlbums,
 } from "../../../server/src/browse";
+import * as downloads from "../../../server/src/downloads";
 import { msg, tr, type MsgKey } from "../../../server/src/i18n";
 import * as library from "../../../server/src/library";
 import { findVideoFor, radio, search, suggestions } from "../../../server/src/search";
 import { HttpError, VIDEO_ID } from "../../../server/src/types";
 import { getLang, getT } from "../i18n";
 import { ApiError, type MusikeApi, type SystemInfo } from "../lib/apiTypes";
+import type { DownloadsInfo } from "../lib/types";
 import "./android";
+import { androidDownloads, downloadsAvailable, downloadsReady, fileUrl } from "./downloads";
 import { media } from "./media";
 import { nativeStorage } from "./storage";
 import { forgetUrl, resolveAudio } from "./streams";
@@ -27,6 +30,9 @@ import { forgetUrl, resolveAudio } from "./streams";
 export * from "../lib/apiTypes";
 
 library.useLibraryStorage(nativeStorage);
+if (downloadsAvailable) downloads.useDownloadsBackend(androidDownloads);
+
+const NO_DOWNLOADS: DownloadsInfo = { items: [], jobs: [], bytes: 0 };
 
 const fail = (status: number, key: MsgKey) => new ApiError(status, tr(getLang(), msg(key)));
 
@@ -85,6 +91,9 @@ export const api: MusikeApi = {
   prepare: (id, signal) =>
     call(async () => {
       if (!VIDEO_ID.test(id)) throw fail(400, "invalidVideoId");
+      // A downloaded song has nothing to resolve (and may be all there is to play, with no internet).
+      const saved = downloadsAvailable ? await downloads.downloadOf(id) : null;
+      if (saved) return { id, title: saved.track.title, duration: saved.track.duration, hasSdVideo: false };
       const r = await resolveAudio(id);
       return { id, title: r.title, duration: r.duration, hasSdVideo: false };
     }, signal),
@@ -107,14 +116,38 @@ export const api: MusikeApi = {
       return library.importLibrary(b.library, mode);
     }),
 
+  downloads: () =>
+    downloadsAvailable
+      ? call(async () => {
+          // The folder first: the app builds the saved covers' addresses from it as soon as this answers.
+          await downloadsReady();
+          return downloads.getDownloads(getLang());
+        })
+      : Promise.resolve(NO_DOWNLOADS),
+  download: (list) => call(() => downloads.enqueue(list, getLang())),
+  removeDownloads: (ids) => call(() => downloads.removeDownloads(ids, getLang())),
+
   system: async () => SYSTEM,
   updateYtdlp: async () => {
     throw new ApiError(400, "yt-dlp isn't used on this device.");
   },
 };
 
-/** On the phone, the media element plays YouTube's stream directly: resolved here, no proxy needed. */
-export const streamSource = (id: string): Promise<string> => resolveAudio(id).then((r) => r.url);
+/**
+ * On the phone, the media element plays YouTube's stream directly: resolved here, no proxy needed.
+ * A downloaded song plays from its file instead: at once, and with no internet at all.
+ */
+export async function streamSource(id: string): Promise<string> {
+  const saved = downloadsAvailable ? await downloads.downloadOf(id).catch(() => null) : null;
+  if (saved) {
+    await downloadsReady();
+    return fileUrl(saved.file);
+  }
+  return (await resolveAudio(id)).url;
+}
+
+/** Where a downloaded song's saved cover is: an image that loads with no internet. */
+export const downloadCover = (id: string): string => fileUrl(`${id}.jpg`);
 
 export async function explainStreamError(url: string): Promise<{ message: string }> {
   forgetUrl(url);
@@ -129,4 +162,4 @@ export async function saveFile(name: string, text: string) {
 
 export const systemMedia = media;
 
-export const capabilities = { video: false, engineSettings: false, retryOnError: true };
+export const capabilities = { video: false, engineSettings: false, retryOnError: true, downloads: downloadsAvailable };

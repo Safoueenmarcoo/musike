@@ -82,8 +82,12 @@ async function run(args: string[], timeoutMs: number): Promise<string> {
 // Failures that usually mean YouTube changed and yt-dlp needs an update.
 const OUTDATED = /nsig|signature|n challenge|JavaScript runtime|Unable to extract|Failed to extract|player response|Requested format is not available|HTTP Error 403/i;
 
+// yt-dlp couldn't even reach YouTube: the computer is offline. Updating yt-dlp wouldn't help.
+const NO_NETWORK = /getaddrinfo failed|name resolution|Name or service not known|nodename nor servname|Failed to resolve|No address associated|Network is unreachable|No route to host/i;
+
 function toHttpError(stderr: string): HttpError {
   const line = stderr.split("\n").find((l) => l.includes("ERROR")) ?? stderr.trim().split("\n").pop() ?? "";
+  if (NO_NETWORK.test(stderr)) return new HttpError(503, msg("offline"));
   if (/confirm you.re not a bot|Sign in to confirm/i.test(line)) {
     return new HttpError(503, msg("botCheck"), "bot_check");
   }

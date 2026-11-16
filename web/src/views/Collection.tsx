@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { Cover, type CoverKind } from "../components/Cover";
 import { NamePlaylistDialog } from "../components/Dialogs";
+import { DownloadAllButton } from "../components/Download";
 import { IconButton, PlayDisc } from "../components/IconButton";
 import { Modal } from "../components/Modal";
 import { EmptyState, PageHeader } from "../components/Page";
@@ -15,7 +16,7 @@ import { usePlayer } from "../player/player";
 import { useLibrary } from "../stores/library";
 
 interface Props {
-  kind: CoverKind;
+  kind: Exclude<CoverKind, "downloads">;
 }
 
 /** Playlist, Favorites and History share one layout. */
@@ -106,6 +107,8 @@ export default function Collection({ kind }: Props) {
         >
           <ShuffleIcon size={24} />
         </IconButton>
+        {/* A playlist or the favorites can be kept on the device; the history changes with every song played. */}
+        {kind !== "history" && <DownloadAllButton tracks={tracks} />}
         {kind === "playlist" && (
           <IconButton label={t.collection.more} size="lg" onClick={() => setMoreOpen(true)}>
             <DotsThreeIcon size={26} weight="bold" />

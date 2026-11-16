@@ -366,20 +366,15 @@ public class PlaybackService extends Service {
     }
 
     private static Bitmap download(String url) {
+        // A downloaded song's cover is a file on the phone (a path, not an address): no network needed.
+        if (url.startsWith("/")) return fit(BitmapFactory.decodeFile(url));
         HttpURLConnection connection = null;
         try {
             connection = (HttpURLConnection) new URL(url).openConnection();
             connection.setConnectTimeout(10_000);
             connection.setReadTimeout(10_000);
             try (InputStream in = connection.getInputStream()) {
-                Bitmap bitmap = BitmapFactory.decodeStream(in);
-                if (bitmap == null) return null;
-                // Large bitmaps can exceed what the system accepts for a notification.
-                int max = 512;
-                int side = Math.max(bitmap.getWidth(), bitmap.getHeight());
-                if (side <= max) return bitmap;
-                float scale = (float) max / side;
-                return Bitmap.createScaledBitmap(bitmap, Math.round(bitmap.getWidth() * scale), Math.round(bitmap.getHeight() * scale), true);
+                return fit(BitmapFactory.decodeStream(in));
             }
         } catch (Exception e) {
             Log.w(TAG, "Could not load the cover art", e);
@@ -387,5 +382,15 @@ public class PlaybackService extends Service {
         } finally {
             if (connection != null) connection.disconnect();
         }
+    }
+
+    /** Large bitmaps can exceed what the system accepts for a notification. */
+    private static Bitmap fit(Bitmap bitmap) {
+        if (bitmap == null) return null;
+        int max = 512;
+        int side = Math.max(bitmap.getWidth(), bitmap.getHeight());
+        if (side <= max) return bitmap;
+        float scale = (float) max / side;
+        return Bitmap.createScaledBitmap(bitmap, Math.round(bitmap.getWidth() * scale), Math.round(bitmap.getHeight() * scale), true);
     }
 }

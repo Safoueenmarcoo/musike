@@ -1,6 +1,7 @@
-# Builds every download for a release tag (v1.4.0) and attaches them to a draft GitHub release:
-# the Windows installer, the macOS apps (Apple Silicon and Intel), the Linux packages, the Android APK and the
-# unsigned iOS app.
+# Builds the downloads for a release tag (v1.6.0) and attaches them to a draft GitHub release.
+# This fork ships two: the Windows installer and the Android APK. The macOS apps, the Linux packages and the
+# unsigned iOS app are still here, and build when the workflow is started by hand with their names
+# (Actions → Release → Run workflow → "windows android mac linux ios").
 # The draft only goes public when it's published by hand, after checking it.
 #
 # The APK is signed with the key in these repository secrets (Settings → Secrets and variables → Actions):
@@ -13,12 +14,17 @@ on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      platforms:
+        description: "Systems to build, separated by spaces: windows android mac linux ios"
+        default: "windows android"
 
 permissions:
   contents: read
 
 jobs:
   windows:
+    if: github.event_name == 'push' || contains(inputs.platforms, 'windows')
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v5
@@ -42,6 +48,7 @@ jobs:
           if-no-files-found: error
 
   mac:
+    if: github.event_name == 'workflow_dispatch' && contains(inputs.platforms, 'mac')
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v5
@@ -68,6 +75,7 @@ jobs:
           if-no-files-found: error
 
   linux:
+    if: github.event_name == 'workflow_dispatch' && contains(inputs.platforms, 'linux')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -92,6 +100,7 @@ jobs:
           if-no-files-found: error
 
   android:
+    if: github.event_name == 'push' || contains(inputs.platforms, 'android')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -124,8 +133,11 @@ jobs:
         shell: bash
         run: |
           { echo "### Android"; ls release | sed 's/^/- /'; } >> "$GITHUB_STEP_SUMMARY"
-          found=$(ls release/*-Android.apk 2>/dev/null | wc -l)
-          [ "$found" -eq 1 ] || { echo "::error::Expected 1 file(s) matching *-Android.apk, found $found"; ls -l release; exit 1; }
+          found=$(ls release/*-Android*.apk 2>/dev/null | wc -l)
+          [ "$found" -eq 1 ] || { echo "::error::Expected 1 file(s) matching *-Android*.apk, found $found"; ls -l release; exit 1; }
+          # Without the signing secrets the APK comes out as "-Android-unsigned.apk": it has to be signed (always
+          # with the same key) before a phone will install it.
+          ls release/*-unsigned.apk >/dev/null 2>&1 && echo "::warning::The APK is unsigned: add the MUSIKE_KEYSTORE* secrets, or sign it by hand." || true
       - uses: actions/upload-artifact@v7
         with:
           name: android
@@ -133,6 +145,7 @@ jobs:
           if-no-files-found: error
 
   ios:
+    if: github.event_name == 'workflow_dispatch' && contains(inputs.platforms, 'ios')
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v5
@@ -158,7 +171,8 @@ jobs:
 
   release:
     needs: [windows, mac, linux, android, ios]
-    if: startsWith(github.ref, 'refs/tags/v')
+    # Systems that weren't asked for don't hold the release back; one that failed does.
+    if: ${{ !cancelled() && !contains(needs.*.result, 'failure') && startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -170,6 +184,10 @@ jobs:
       - uses: softprops/action-gh-release@v3
         with:
           draft: true
-          generate_release_notes: true
+          body: |
+            Musike with offline downloads.
+
+            - **Windows:** run the `-Windows.exe` file. It installs over an older Musike and keeps the library and the downloaded songs.
+            - **Android:** open the `-Android.apk` file on the phone. It installs as "Musike+", next to the original app; later versions of this build install over it.
           files: downloads/*
           fail_on_unmatched_files: true

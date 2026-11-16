@@ -10,7 +10,7 @@ import {
   type SystemJob,
   type SystemMedia,
 } from "./apiTypes";
-import type { AlbumCard, AlbumPage, ArtistPage, Genre, GenreArtist, GenrePage, Library, Playlist, Track } from "./types";
+import type { AlbumCard, AlbumPage, ArtistPage, DownloadsInfo, Genre, GenreArtist, GenrePage, Library, Playlist, Track } from "./types";
 
 // The HTTP backend: the Musike server (web app, desktop app). The Android build swaps this module for native/api.ts.
 export * from "./apiTypes";
@@ -77,13 +77,24 @@ export const api: MusikeApi = {
   importLibrary: (backup: unknown, mode: "merge" | "replace") =>
     request<ImportResult>("/api/library/import", { method: "POST", json: { backup, mode } }),
 
+  downloads: () => request<DownloadsInfo>("/api/downloads"),
+  download: (tracks: Track[]) => request<DownloadsInfo>("/api/downloads", { method: "POST", json: { tracks } }),
+  removeDownloads: (ids: string[] | null) =>
+    request<DownloadsInfo>("/api/downloads/remove", { method: "POST", json: ids ? { ids } : {} }),
+
   system: () => request<SystemInfo>("/api/system"),
   updateYtdlp: (channel: Channel) => request<SystemJob>("/api/system/ytdlp", { method: "POST", json: { channel } }),
 };
 
-/** What a media element plays for a track: here, the server's stream proxy. The Android backend resolves it on the phone. */
+/**
+ * What a media element plays for a track: here, the server's stream proxy (which serves a downloaded song from its
+ * file). The Android backend resolves it on the phone.
+ */
 export const streamSource = (id: string, kind: "audio" | "video", quality: "sd" | "hd"): string | Promise<string> =>
   kind === "audio" ? `/api/stream/${id}/audio` : `/api/stream/${id}/video?q=${quality}`;
+
+/** Where a downloaded song's saved cover is: an image that loads with no internet. */
+export const downloadCover = (id: string): string => `/api/downloads/${id}/cover`;
 
 /** Saves a text file the way this platform does it: a browser download (the desktop app shows "Save as"). */
 export async function saveFile(name: string, text: string) {
@@ -98,8 +109,11 @@ export async function saveFile(name: string, text: string) {
 /** Only the Android app needs its own bridge to the system's media controls. */
 export const systemMedia: SystemMedia | null = null;
 
-/** What this build can do. The Android build has no video yet, no yt-dlp to manage, and retries expired streams. */
-export const capabilities = { video: true, engineSettings: true, retryOnError: false };
+/**
+ * What this build can do. The Android build has no video yet, no yt-dlp to manage, and retries expired streams.
+ * Downloads are kept where the music is fetched: on the computer running Musike here, on the phone on Android.
+ */
+export const capabilities = { video: true, engineSettings: true, retryOnError: false, downloads: true };
 
 /** Media elements hide the HTTP error body; fetch it to show the real reason. */
 export async function explainStreamError(url: string): Promise<{ message: string; code?: ErrorCode }> {

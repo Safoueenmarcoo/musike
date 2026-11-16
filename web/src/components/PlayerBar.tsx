@@ -5,6 +5,7 @@ import { selectCurrent, usePlayer, useStatusText } from "../player/player";
 import { useUi } from "../stores/ui";
 import { Artwork } from "./Artwork";
 import { FavoriteButton, ModeSwitch, Scrubber, Transport, Volume } from "./Controls";
+import { DownloadButton } from "./Download";
 import { IconButton } from "./IconButton";
 
 /** Desktop and tablet player: a floating island under the content. */
@@ -30,7 +31,7 @@ export function PlayerBar() {
                 aria-label={t.player.showNowPlaying}
                 className="group relative shrink-0 rounded-[10px] transition-transform active:scale-[0.96]"
               >
-                <Artwork src={track.thumb} className="size-14 rounded-[10px]" />
+                <Artwork src={track.thumb} trackId={track.id} className="size-14 rounded-[10px]" />
               </button>
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium">{track.title}</p>
@@ -39,6 +40,7 @@ export function PlayerBar() {
                 </p>
               </div>
               <FavoriteButton track={track} size="sm" />
+              <DownloadButton track={track} size="sm" className="-ml-2 max-lg:hidden" />
             </>
           ) : (
             <p className="truncate pl-1 text-sm text-fg-3">{t.player.nothingPlaying}</p>

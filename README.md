@@ -24,10 +24,13 @@ Runs as a **Windows**, **macOS** and **Linux** app, as an **Android**, **Android
 
 ---
 
+> **This is a fork** of [Ernani1234/musike](https://github.com/Ernani1234/musike) that adds **offline downloads**: save songs, playlists and albums on the device and play them with no internet. Details in [Offline downloads](#offline-downloads). Its builds, a Windows installer and an Android APK named **Musike+**, are on [this fork's releases page](https://github.com/Safoueenmarcoo/musike/releases). The download links further down point to the original project.
+
 ## Contents
 
 - [What it is](#what-it-is)
 - [Features](#features)
+- [Offline downloads](#offline-downloads)
 - [Screenshots](#screenshots)
 - [How it works](#how-it-works)
 - [Installation](#installation)
@@ -102,6 +105,25 @@ Musike started from the idea behind the old Discord music bots: a server that fe
 - **Settings** shows the yt-dlp version, tells you when there's an update and updates it in one click (Stable or Nightly channel)
 - Playback errors offer the "Update" button right in the notice
 
+## Offline downloads
+
+- **Download** a song from its row or its menu, a playlist or your Favorites with the button next to Shuffle, an album from its page, or any selection of tracks from the bar above a list.
+- Downloaded songs carry a mark and play from the device: at once, and with no internet. **Library > Downloads** lists them with the space they take; removing one is in its menu, removing them all in **Settings > Downloads**.
+- **With no connection** the app says so, dims what isn't downloaded and skips it in the queue. The covers of downloaded songs are saved too, so the library keeps its artwork.
+- A download that fails says why and can be tried again; a dropped connection is picked up where it stopped.
+
+Where the songs are kept:
+
+| Where Musike runs | Folder |
+|---|---|
+| Windows, macOS, Linux app | `downloads` inside Musike's data folder (`%APPDATA%\Musike\downloads` on Windows). Updating or uninstalling the app doesn't delete it |
+| Node server, Docker | `MUSIKE_DOWNLOADS_DIR` (by default `downloads` inside the data folder, so it sits in the `/data` volume) |
+| Android | the app's private storage. Updating keeps it; uninstalling the app removes it |
+
+Each song is the audio stream the player would get, saved as `<video id>.m4a` (AAC) or `.webm` (Opus), with its cover as `<video id>.jpg` and `index.json` listing what is there. In a browser pointed at a Musike server, downloads live on the server, not on the device holding the browser. The iPhone app doesn't download yet.
+
+**Building this fork.** Pushing a tag such as `v1.6.0` runs the Release workflow, which attaches the Windows installer and the Android APK to a draft release. The APK is signed with the key in the repository secrets named at the top of [release.yml](.github/workflows/release.yml): always the same one, or a later APK can't install over the one on the phone. The Android app has its own id (`app.musike.plus`) and name (Musike+), so it installs next to the original app instead of clashing with it; move a library between the two with [backup to a file](#moving-your-library-backup).
+
 ## Screenshots
 
 <table>
@@ -146,7 +168,7 @@ flowchart LR
 ```
 
 1. **Catalog:** the server queries YouTube Music with [youtubei.js](https://github.com/LuanRT/YouTube.js): search, suggestions, genres, artists, albums, radio and picking the official music video.
-2. **Playback:** yt-dlp resolves the stream URLs (AAC audio, MP4 video), running YouTube's player code with Deno. Those URLs are tied to the IP that resolved them, so the server **proxies** the bytes, forwarding the `Range` header so seeking is instant. Nothing is written to disk for audio.
+2. **Playback:** yt-dlp resolves the stream URLs (AAC audio, MP4 video), running YouTube's player code with Deno. Those URLs are tied to the IP that resolved them, so the server **proxies** the bytes, forwarding the `Range` header so seeking is instant. Audio is only written to disk for songs you [download](#offline-downloads), which then play from their file.
 3. **HD video and videos without an SD version:** yt-dlp downloads and merges video + audio with FFmpeg, keeps it in a cache (least-recently-played first, 2 GB by default) and the server serves the file with Range support.
 4. **Library:** playlists, favorites and history live in `library.json`, written atomically.
 
@@ -169,6 +191,7 @@ On first launch, a screen shows the official tools being downloaded: **yt-dlp** 
 |---|---|
 | `bin` | Musike's own yt-dlp, Deno and FFmpeg (updatable in Settings) |
 | `data` | `library.json` with playlists, favorites and history |
+| `downloads` | songs downloaded for offline listening |
 | `cache` | HD videos already downloaded |
 | `backups` | copies of the library made at each update |
 
@@ -354,6 +377,7 @@ Server environment variables (all optional):
 | `YTDLP_PATH` | automatic | Forces a specific yt-dlp executable |
 | `YTDLP_EXTRA_ARGS` | | Extra flags, e.g. `--cookies-from-browser firefox` |
 | `MUSIKE_DATA_DIR` | `server/data` (`/data` in Docker) | Where `library.json` lives |
+| `MUSIKE_DOWNLOADS_DIR` | `downloads` inside the data folder | Songs downloaded for offline listening |
 | `MUSIKE_CACHE_DIR` | `server/cache` (`/cache` in Docker) | Downloaded HD videos |
 | `MUSIKE_CACHE_MAX_MB` | `2048` | Video cache limit (least recently played go first) |
 | `MUSIKE_BIN_DIR` | | Private tools folder (the desktop app uses `%APPDATA%\Musike\bin`) |
@@ -377,7 +401,7 @@ Every route answers JSON. Errors look like `{ "error": "message", "code"?: "tool
 | `GET` | `/api/albums/:alid` | An album's tracks in order |
 | `GET` | `/api/video-for/:id?title=&artist=&duration=` | A song's official music video |
 | `POST` | `/api/prepare/:id` | Resolves a stream before playing |
-| `GET` | `/api/stream/:id/audio` | Audio with HTTP Range |
+| `GET` | `/api/stream/:id/audio` | Audio with HTTP Range (from the file, for a downloaded song) |
 | `GET` | `/api/stream/:id/video?q=sd\|hd` | Video with HTTP Range |
 | `GET` | `/api/library` | The whole library |
 | `PUT` / `DELETE` | `/api/favorites/:id` | Favorite / unfavorite |
@@ -387,6 +411,10 @@ Every route answers JSON. Errors look like `{ "error": "message", "code"?: "tool
 | `PATCH` / `DELETE` | `/api/playlists/:pid` | Renames / deletes |
 | `POST` / `DELETE` | `/api/playlists/:pid/tracks[/:id]` | Adds (one track or `{ tracks }`) / removes a track |
 | `POST` | `/api/library/import` | Imports a backup (`{ backup, mode: "merge" \| "replace" }`) |
+| `GET` | `/api/downloads` | Downloaded songs, downloads under way and the space used |
+| `POST` | `/api/downloads` | Queues tracks for download (`{ tracks }`) |
+| `POST` | `/api/downloads/remove` | Removes downloads or cancels them (`{ ids }`; everything without `ids`) |
+| `GET` | `/api/downloads/:id/cover` | A downloaded song's saved cover |
 | `GET` | `/api/system` | yt-dlp, Deno and FFmpeg versions and downloads |
 | `POST` | `/api/system/ytdlp` | Updates or installs yt-dlp (`{ channel: "stable" \| "nightly" }`) |
 
@@ -402,6 +430,7 @@ musike/
 │     ├─ ytdlp.ts       stream resolution, HD cache, error messages
 │     ├─ stream.ts      proxy with HTTP Range
 │     ├─ library.ts     playlists, favorites, history and backup import
+│     ├─ downloads.ts   offline downloads: queue and list (shared with the Android app); downloadsFile.ts saves the files
 │     ├─ i18n.ts        server messages in each language
 │     ├─ tools.ts       finds yt-dlp, Deno, FFmpeg (Windows registry, winget, PATH)
 │     ├─ bootstrap.ts   downloads the tools for the desktop app
@@ -474,7 +503,7 @@ Ideas and bug reports are welcome in [Issues](https://github.com/Ernani1234/musi
 
 ## Legal notice
 
-Musike is a project for **personal and educational use**. Playing YouTube content without ads by extracting its streams goes against [YouTube's Terms of Service](https://www.youtube.com/t/terms); public services that did this, such as the Groovy and Rythm bots, were shut down after notices from Google. Don't offer Musike as a public service, don't monetize it, and respect the artists' rights. The project doesn't host, distribute or store YouTube content beyond the temporary local cache of whoever runs it.
+Musike is a project for **personal and educational use**. Playing YouTube content without ads by extracting its streams goes against [YouTube's Terms of Service](https://www.youtube.com/t/terms); public services that did this, such as the Groovy and Rythm bots, were shut down after notices from Google. Don't offer Musike as a public service, don't monetize it, and respect the artists' rights. The project doesn't host or distribute YouTube content: what it stores is the local cache and, in this fork, the songs you choose to download, on the device of whoever runs it and for their own listening.
 
 ## License
 

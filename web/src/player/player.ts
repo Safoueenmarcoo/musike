@@ -1,9 +1,11 @@
 import { create } from "zustand";
+import { isOnline } from "../hooks/useOnline";
 import { getT, useT } from "../i18n";
 import { api, capabilities, explainStreamError, streamSource, systemMedia, type ApiError, type ErrorCode } from "../lib/api";
 import { createAudio } from "../lib/audio";
 import { shuffled } from "../lib/format";
 import type { Track } from "../lib/types";
+import { isDownloaded, useDownloads } from "../stores/downloads";
 import { useLibrary } from "../stores/library";
 import { openSettings } from "../stores/system";
 import { toast } from "../stores/ui";
@@ -110,6 +112,10 @@ const saved = readSaved();
  */
 const clipFor = new Map<string, string | null>();
 const clipLookups = new Map<string, Promise<string | null>>();
+/** Lookups that failed (no internet, server trouble) and when: the song plays as audio meanwhile, and is asked about again later. */
+const clipFailedAt = new Map<string, number>();
+const CLIP_RETRY_MS = 60_000;
+addEventListener("online", () => clipFailedAt.clear());
 
 function lookupClip(track: Track): Promise<string | null> {
   if (track.kind === "video") return Promise.resolve(track.id);
@@ -124,7 +130,11 @@ function lookupClip(track: Track): Promise<string | null> {
           clipFor.set(track.id, id);
           return id;
         },
-        () => null, // network hiccup: don't remember it, try again next time
+        () => {
+          // Network hiccup: don't remember it as "no clip", but don't ask again right away either.
+          clipFailedAt.set(track.id, Date.now());
+          return null;
+        },
       )
       .finally(() => clipLookups.delete(track.id));
     clipLookups.set(track.id, lookup);
@@ -133,7 +143,25 @@ function lookupClip(track: Track): Promise<string | null> {
 }
 
 const needsClipLookup = (track: Track, preferVideo: boolean) =>
-  preferVideo && track.kind === "song" && !clipFor.has(track.id);
+  preferVideo && track.kind === "song" && !clipFor.has(track.id) && Date.now() - (clipFailedAt.get(track.id) ?? -Infinity) > CLIP_RETRY_MS;
+
+/** With no internet only downloaded songs can play. (Builds without downloads leave it to the stream to fail.) */
+const playable = (track: Track) => !capabilities.downloads || isOnline() || isDownloaded(track.id);
+
+/**
+ * The nearest song that can play, from `from` stepping by `step` (and around the ends of the queue with `wrap`).
+ * With a connection that is `from` itself; without one, songs that aren't downloaded are passed over.
+ */
+function nearestPlayable(queue: Track[], from: number, step: 1 | -1, wrap: boolean): number | null {
+  for (let n = 0, i = from; n < queue.length; n++, i += step) {
+    if (i < 0 || i >= queue.length) {
+      if (!wrap) return null;
+      i = (i + queue.length) % queue.length;
+    }
+    if (playable(queue[i])) return i;
+  }
+  return null;
+}
 
 export const usePlayer = create<PlayerState>((set, get) => {
   const kindFor = (track: Track): Kind =>
@@ -156,6 +184,8 @@ export const usePlayer = create<PlayerState>((set, get) => {
     const s = get();
     const track = s.queue[index];
     if (!track) return;
+    // No internet and not downloaded: it can't even start. Say so and leave whatever is playing alone.
+    if (!playable(track)) return void toast(getT().downloads.toasts.offlineTrack(track.title), "error");
 
     // Video mode on a song: find its music video first, then load whichever fits.
     if (needsClipLookup(track, s.preferVideo)) {
@@ -261,9 +291,11 @@ export const usePlayer = create<PlayerState>((set, get) => {
       }
       return;
     }
-    if (s.index < s.queue.length - 1) return load(s.index + 1);
-    if (s.repeat === "all" && s.queue.length) return load(0);
-    if (s.autoRadio) return void continueWithRadio();
+    const next = nearestPlayable(s.queue, s.index + 1, 1, s.repeat === "all");
+    if (next !== null) return load(next);
+    if (s.autoRadio && isOnline()) return void continueWithRadio();
+    // Songs were left, but with no internet none of them is downloaded: say why the music stopped.
+    if (s.index < s.queue.length - 1) toast(getT().downloads.toasts.offlineQueue);
     set({ status: "paused", position: 0 });
   }
 
@@ -384,9 +416,12 @@ export const usePlayer = create<PlayerState>((set, get) => {
     quality: saved.quality ?? "sd",
     autoRadio: saved.autoRadio ?? true,
 
-    playList: (tracks, start = 0) => {
+    playList: (tracks, asked = 0) => {
       if (!tracks.length) return;
-      const first = tracks[start] ?? tracks[0];
+      // With no internet, begin at the first downloaded song from the one asked for (looking around the whole list).
+      const start = nearestPlayable(tracks, tracks[asked] ? asked : 0, 1, true);
+      if (start === null) return void toast(getT().downloads.toasts.offlineQueue, "error");
+      const first = tracks[start];
       if (get().shuffle) {
         const rest = tracks.filter((_, i) => i !== start);
         set({ queue: [first, ...shuffled(rest)], original: tracks.slice() });
@@ -399,6 +434,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
 
     playTrack: (track) => {
       const s = get();
+      if (!playable(track)) return void toast(getT().downloads.toasts.offlineTrack(track.title), "error");
       const at = s.queue.findIndex((t) => t.id === track.id);
       if (at >= 0) return load(at);
       if (!s.queue.length) return get().playList([track]);
@@ -438,7 +474,8 @@ export const usePlayer = create<PlayerState>((set, get) => {
       if (i > s.index) return set({ queue, original });
       // Removing the current track: move on to whatever takes its place.
       set({ queue, original });
-      if (queue[i]) load(i, { autoplay: s.status === "playing" });
+      const after = nearestPlayable(queue, i, 1, false);
+      if (after !== null) load(after, { autoplay: s.status === "playing" });
       else {
         activeMedia()?.pause();
         loaded = null;
@@ -483,15 +520,18 @@ export const usePlayer = create<PlayerState>((set, get) => {
 
     next: () => {
       const s = get();
-      if (s.index < s.queue.length - 1) return load(s.index + 1);
-      if (s.repeat === "all" && s.queue.length) return load(0);
-      if (s.autoRadio) void continueWithRadio();
+      const at = nearestPlayable(s.queue, s.index + 1, 1, s.repeat === "all");
+      if (at !== null) return load(at);
+      if (s.index < s.queue.length - 1) return void toast(getT().downloads.toasts.offlineQueue);
+      if (s.autoRadio && isOnline()) void continueWithRadio();
     },
 
     prev: () => {
       const s = get();
       if (s.position > 3 || s.index === 0) return get().seek(0);
-      load(s.index - 1);
+      const at = nearestPlayable(s.queue, s.index - 1, -1, false);
+      if (at === null) return get().seek(0);
+      load(at);
     },
 
     seek: (seconds) => {
@@ -593,14 +633,17 @@ document.addEventListener("visibilitychange", () => document.visibilityState ===
 // Media Session: lock-screen, headset and notification controls.
 
 function setMetadata(track: Track) {
-  systemMedia?.setTrack({ title: track.title, artist: track.artist, album: track.album ?? "", artwork: track.art || track.thumb });
+  // A downloaded song's saved cover stands in for the remote one when there is no internet to fetch it with.
+  const cover = isOnline() ? undefined : useDownloads.getState().covers[track.id];
+  systemMedia?.setTrack({ title: track.title, artist: track.artist, album: track.album ?? "", artwork: cover ?? (track.art || track.thumb) });
   if (!("mediaSession" in navigator)) return;
   navigator.mediaSession.metadata = new MediaMetadata({
     title: track.title,
     artist: track.artist,
     album: track.album ?? "",
-    artwork:
-      track.kind === "video"
+    artwork: cover
+      ? [{ src: new URL(cover, location.href).href, type: "image/jpeg" }]
+      : track.kind === "video"
         ? [
             { src: track.art, sizes: "1280x720", type: "image/jpeg" },
             { src: track.thumb, sizes: "320x180", type: "image/jpeg" },

@@ -15,6 +15,7 @@ import { useSystem } from "../stores/system";
 import { useUi } from "../stores/ui";
 import { BackupSection } from "./BackupSection";
 import { AccentPicker, LayoutSection } from "./CustomizeSection";
+import { DownloadsSection } from "./DownloadsSection";
 import { Modal } from "./Modal";
 
 function Segmented<T extends string>({
@@ -153,6 +154,8 @@ export function SettingsDialog() {
         </section>
 
         <LayoutSection />
+
+        <DownloadsSection />
 
         <BackupSection />
 

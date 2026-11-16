@@ -5,9 +5,12 @@ import { Cover, type CoverKind } from "../components/Cover";
 import { NamePlaylistDialog } from "../components/Dialogs";
 import { PageHeader } from "../components/Page";
 import { useT } from "../i18n";
+import { capabilities } from "../lib/api";
+import { formatBytes } from "../lib/format";
 import { paths } from "../lib/routes";
 import type { Track } from "../lib/types";
 import { IconButton } from "../components/IconButton";
+import { useDownloads } from "../stores/downloads";
 import { useLibrary } from "../stores/library";
 import { useUi } from "../stores/ui";
 
@@ -37,6 +40,8 @@ export default function Library() {
   const { favorites, playlists, history, createPlaylist } = useLibrary();
   const [creating, setCreating] = useState(false);
   const setSettingsOpen = useUi((s) => s.setSettingsOpen);
+  const downloaded = useDownloads((s) => s.items.length);
+  const downloadedBytes = useDownloads((s) => s.bytes);
   const navigate = useNavigate();
   const t = useT();
 
@@ -64,6 +69,15 @@ export default function Library() {
       <ul className="grid grid-cols-1 gap-1 px-2 pt-2 md:grid-cols-3 md:gap-2 md:px-4 lg:grid-cols-4 2xl:grid-cols-6">
         <Entry to={paths.favorites} name={t.nav.favorites} kind="favorites" tracks={favorites} sub={t.common.tracks(favorites.length)} />
         <Entry to={paths.history} name={t.nav.recentlyPlayed} kind="history" tracks={history} sub={t.common.tracks(history.length)} />
+        {capabilities.downloads && (
+          <Entry
+            to={paths.downloads}
+            name={t.downloads.title}
+            kind="downloads"
+            tracks={[]}
+            sub={downloaded ? t.downloads.summary(downloaded, formatBytes(downloadedBytes, t.locale)) : t.downloads.label}
+          />
+        )}
         {playlists.map((p) => (
           <Entry
             key={p.id}

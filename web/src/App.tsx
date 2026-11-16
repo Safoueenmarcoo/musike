@@ -3,6 +3,7 @@ import { Navigate, Route, Routes, useLocation, useNavigate, useNavigationType } 
 import { AddToPlaylistDialog, ShortcutsDialog } from "./components/Dialogs";
 import { MiniPlayer, TabBar } from "./components/MobileChrome";
 import { NowPlayingSheet, PanelDrawer, SidePanel } from "./components/NowPlaying";
+import { OfflineNotice } from "./components/OfflineNotice";
 import { PlayerBar } from "./components/PlayerBar";
 import { Rail } from "./components/Rail";
 import { TitleBar } from "./components/TitleBar";
@@ -18,6 +19,7 @@ import { capabilities } from "./lib/api";
 import { cn } from "./lib/format";
 import { legacyRedirect, NOW_PLAYING_HASH, paths } from "./lib/routes";
 import { usePlayer } from "./player/player";
+import { useDownloads } from "./stores/downloads";
 import { useLibrary } from "./stores/library";
 import { openSettings, useSystem } from "./stores/system";
 import { toast, useUi } from "./stores/ui";
@@ -25,6 +27,7 @@ import Album from "./views/Album";
 import Artist from "./views/Artist";
 import BatchSearch from "./views/BatchSearch";
 import Collection from "./views/Collection";
+import Downloads from "./views/Downloads";
 import Genre from "./views/Genre";
 import Home from "./views/Home";
 import Library from "./views/Library";
@@ -41,6 +44,7 @@ export default function App() {
   const panelOpen = useUi((s) => s.panelOpen);
   const hasTrack = usePlayer((s) => s.queue.length > 0);
   const loadLibrary = useLibrary((s) => s.load);
+  const loadDownloads = useDownloads((s) => s.load);
   const loadSystem = useSystem((s) => s.load);
   const main = useRef<HTMLElement>(null);
 
@@ -48,7 +52,8 @@ export default function App() {
 
   useEffect(() => {
     void loadLibrary();
-  }, [loadLibrary]);
+    void loadDownloads();
+  }, [loadLibrary, loadDownloads]);
 
   // Check yt-dlp shortly after start and say so once if something needs doing (not on Android: no yt-dlp there).
   useEffect(() => {
@@ -118,6 +123,7 @@ export default function App() {
             "md:pb-0",
           )}
         >
+          <OfflineNotice className="mx-4 mt-4 hidden md:flex" />
           {legacy ? (
             <Navigate to={legacy} replace />
           ) : (
@@ -131,6 +137,7 @@ export default function App() {
               <Route path={paths.library} element={<Library />} />
               <Route path={paths.favorites} element={<Collection kind="favorites" />} />
               <Route path={paths.history} element={<Collection kind="history" />} />
+              <Route path={paths.downloads} element={<Downloads />} />
               <Route path="/playlist/:id" element={<Collection kind="playlist" />} />
               <Route path="*" element={<Home />} />
             </Routes>

@@ -13,9 +13,11 @@ import { useT } from "../i18n";
 import { cn } from "../lib/format";
 import type { Track } from "../lib/types";
 import { selectCurrent, usePlayer, useStatusText } from "../player/player";
+import { useThumb } from "../stores/downloads";
 import { useUi, type PanelTab } from "../stores/ui";
 import { Artwork } from "./Artwork";
 import { FavoriteButton, ModeSwitch, Scrubber, Transport } from "./Controls";
+import { DownloadButton } from "./Download";
 import { IconButton } from "./IconButton";
 import { QueueList } from "./Queue";
 import { SLOT, VideoSlot } from "./Video";
@@ -29,6 +31,7 @@ function Stage({ track, slot, className }: { track: Track; slot: number; classNa
   const note = usePlayer((s) =>
     s.preferVideo ? (s.videoNote ?? (s.statusText === "findingClip" ? s.statusText : null)) : null,
   );
+  const thumb = useThumb(track);
   if (showsVideo) {
     const portrait = aspect < 1;
     return (
@@ -45,7 +48,7 @@ function Stage({ track, slot, className }: { track: Track; slot: number; classNa
   return (
     <div className={cn("relative mx-auto aspect-square w-full", className)}>
       <img
-        src={track.thumb}
+        src={thumb}
         alt=""
         aria-hidden="true"
         className="absolute inset-[8%] h-[84%] w-[84%] scale-110 rounded-full object-cover opacity-50 blur-3xl"
@@ -53,6 +56,7 @@ function Stage({ track, slot, className }: { track: Track; slot: number; classNa
       <Artwork
         src={track.art}
         fallback={track.thumb}
+        trackId={track.id}
         alt={t.nowPlaying.coverOf(track.title)}
         iconSize={48}
         className="relative size-full rounded-[18px] shadow-[0_24px_60px_rgb(0_0_0/0.45)]"
@@ -71,6 +75,19 @@ function Stage({ track, slot, className }: { track: Track; slot: number; classNa
   );
 }
 
+/** The phone sheet's soft wash of the cover's colours. */
+function Backdrop({ track }: { track: Track }) {
+  const thumb = useThumb(track);
+  return (
+    <img
+      src={thumb}
+      alt=""
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-0 h-1/2 w-full scale-125 object-cover opacity-25 blur-3xl"
+    />
+  );
+}
+
 function TrackHeading({ track, large = false }: { track: Track; large?: boolean }) {
   const statusText = useStatusText();
   const status = usePlayer((s) => s.status);
@@ -82,6 +99,7 @@ function TrackHeading({ track, large = false }: { track: Track; large?: boolean 
           {statusText ?? [track.artist, track.album].filter(Boolean).join(" · ")}
         </p>
       </div>
+      <DownloadButton track={track} size={large ? "lg" : "md"} className="-mr-2" />
       <FavoriteButton track={track} size={large ? "lg" : "md"} />
     </div>
   );
@@ -115,7 +133,7 @@ function PanelBody({ tab, slot }: { tab: PanelTab; slot: number }) {
         <div className="rounded-[14px] bg-surface-1 p-3 ring-1 ring-line">
           <p className="pb-2 text-xs font-medium text-fg-3">{t.nowPlaying.upNext}</p>
           <div className="flex items-center gap-3">
-            <Artwork src={nextUp.thumb} className="size-10 rounded-[8px]" />
+            <Artwork src={nextUp.thumb} trackId={nextUp.id} className="size-10 rounded-[8px]" />
             <div className="min-w-0">
               <p className="truncate text-sm font-medium">{nextUp.title}</p>
               <p className="truncate text-xs text-fg-2">{nextUp.artist}</p>
@@ -256,12 +274,7 @@ export function NowPlayingSheet({ open, onClose }: { open: boolean; onClose: () 
           }}
           className="fixed inset-0 z-40 flex flex-col overflow-hidden bg-bg md:hidden"
         >
-          <img
-            src={track.thumb}
-            alt=""
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-0 h-1/2 w-full scale-125 object-cover opacity-25 blur-3xl"
-          />
+          <Backdrop track={track} />
           <div className="pointer-events-none absolute inset-0 bg-linear-to-b from-transparent via-bg/70 to-bg" />
 
           <div className="overlay-top relative flex flex-1 flex-col px-5">

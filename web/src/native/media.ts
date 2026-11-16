@@ -1,5 +1,6 @@
 import { registerPlugin, type PluginListenerHandle } from "@capacitor/core";
 import type { SystemMedia } from "../lib/apiTypes";
+import { filePathOf } from "./downloads";
 
 /**
  * Bridge to the app's Android side (MusikePlaybackPlugin.java): a foreground service with a media session,
@@ -52,7 +53,8 @@ function worthSending(playing: boolean, position: number): boolean {
 const androidMedia: SystemMedia = {
   setTrack(track) {
     last = { playing: last.playing, position: 0, at: Date.now() };
-    void Playback.update({ ...track, position: 0 });
+    // A downloaded song's cover is a file on the phone: the notification reads it from its path, with no internet.
+    void Playback.update({ ...track, artwork: filePathOf(track.artwork) ?? track.artwork, position: 0 });
   },
   setState({ playing, position, duration }) {
     if (!worthSending(playing, position)) return;

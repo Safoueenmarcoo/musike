@@ -1,10 +1,9 @@
-# Builds the Docker image for every release tag (v1.2.0 → :1.2.0, :1.2 and :latest) and publishes it
-# to GitHub Container Registry as ghcr.io/<owner>/musike. Can also be started by hand from the Actions tab.
+# Builds the Docker image (v1.2.0 → :1.2.0, :1.2 and :latest) and publishes it to GitHub Container Registry as
+# ghcr.io/<owner>/musike. In this fork it only runs when started by hand from the Actions tab: a release tag
+# builds the Windows installer and the Android APK (release.yml), and publishes nothing else.
 name: Docker image
 
 on:
-  push:
-    tags: ["v*"]
   workflow_dispatch:
 
 permissions:

@@ -53,6 +53,10 @@ const en = {
   toolMissing: "{tool} wasn't found on this computer.",
   downloadFailed: "Downloading {tool} failed (HTTP {status}).",
   ffmpegPackage: "Unexpected FFmpeg package.",
+  offline: "No internet connection. Downloaded songs still play.",
+  songDownloadFailed: "Couldn't download this song. Try again.",
+  downloadIncomplete: "The download stopped before the end. Try again.",
+  noSpace: "There's no space left on this device to save the song.",
 };
 
 export type MsgKey = keyof typeof en;
@@ -104,6 +108,10 @@ const pt: Record<MsgKey, string> = {
   toolMissing: "{tool} não encontrado neste computador.",
   downloadFailed: "Download de {tool} falhou (HTTP {status}).",
   ffmpegPackage: "Pacote do FFmpeg inesperado.",
+  offline: "Sem conexão com a internet. As músicas baixadas continuam tocando.",
+  songDownloadFailed: "Não foi possível baixar esta música. Tente de novo.",
+  downloadIncomplete: "O download parou antes do fim. Tente de novo.",
+  noSpace: "Não há espaço neste dispositivo para salvar a música.",
 };
 
 const CATALOG: Record<Lang, Record<MsgKey, string>> = { en, "pt-BR": pt };

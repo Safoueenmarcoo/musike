@@ -3,6 +3,7 @@ import path from "node:path";
 
 // Folder of the server package (bundled builds pass every path through env instead).
 const root = typeof import.meta.url === "string" ? path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..") : process.cwd();
+const dataDir = process.env.MUSIKE_DATA_DIR ?? path.join(root, "data");
 
 export const config = {
   port: Number(process.env.PORT ?? 4180),
@@ -11,7 +12,9 @@ export const config = {
   ytdlpPath: process.env.YTDLP_PATH || null,
   // Extra yt-dlp flags, e.g. YTDLP_EXTRA_ARGS="--cookies-from-browser firefox"
   ytdlpExtraArgs: (process.env.YTDLP_EXTRA_ARGS ?? "").split(" ").filter(Boolean),
-  dataDir: process.env.MUSIKE_DATA_DIR ?? path.join(root, "data"),
+  dataDir,
+  /** Songs saved for offline listening. Never pruned: only the user removes a download. */
+  downloadsDir: process.env.MUSIKE_DOWNLOADS_DIR ?? path.join(dataDir, "downloads"),
   cacheDir: process.env.MUSIKE_CACHE_DIR ?? path.join(root, "cache"),
   /** HD video cache limit; least recently played videos are evicted first. */
   cacheMaxBytes: Number(process.env.MUSIKE_CACHE_MAX_MB ?? 2048) * 1024 * 1024,

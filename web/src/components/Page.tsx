@@ -7,6 +7,7 @@ import { needsAttention, useSystem } from "../stores/system";
 import { useUi } from "../stores/ui";
 import { LogoMark } from "./Brand";
 import { IconButton } from "./IconButton";
+import { OfflineNotice } from "./OfflineNotice";
 
 /** Sticky page header. On phones it carries the brand mark and the settings entry, since there is no rail. */
 export function PageHeader({
@@ -47,6 +48,8 @@ export function PageHeader({
           {attention && <span className="absolute top-2 right-2 size-2 rounded-full bg-accent ring-2 ring-bg" />}
         </IconButton>
       </div>
+      {/* Phones: under the bar every page has. Wider screens show it once, at the top of the page (see App). */}
+      <OfflineNotice className="mx-3 mb-2 flex md:hidden" />
     </header>
   );
 }

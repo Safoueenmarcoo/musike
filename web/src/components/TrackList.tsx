@@ -1,14 +1,63 @@
-import { ClockIcon, DotsThreeIcon, HeartIcon, VideoCameraIcon } from "@phosphor-icons/react";
+import { ArrowCircleDownIcon, ClockIcon, DotsThreeIcon, HeartIcon, VideoCameraIcon, WarningCircleIcon } from "@phosphor-icons/react";
 import { memo, type MouseEvent } from "react";
 import { useT } from "../i18n";
+import { capabilities } from "../lib/api";
 import { cn, formatTime } from "../lib/format";
 import type { Track } from "../lib/types";
 import { selectCurrent, usePlayer } from "../player/player";
 import { useAppearance } from "../stores/appearance";
+import { useDownloadProgress, useDownloads, useDownloadStatus, useUnavailable } from "../stores/downloads";
 import { useLibrary } from "../stores/library";
-import { useUi } from "../stores/ui";
+import { toast, useUi } from "../stores/ui";
 import { Artwork } from "./Artwork";
 import { Equalizer } from "./Brand";
+import { DownloadBadge, ProgressRing } from "./Download";
+
+/**
+ * The row's download slot on wide screens: a button that shows on hover, the progress while the song arrives
+ * (click to cancel), and a mark once it is saved. Phones show a small mark beside the artist and use the track menu.
+ */
+function RowDownload({ track }: { track: Track }) {
+  const status = useDownloadStatus(track.id);
+  const progress = useDownloadProgress(track.id);
+  const download = useDownloads((s) => s.download);
+  const remove = useDownloads((s) => s.remove);
+  const t = useT();
+
+  if (status === "done") {
+    return (
+      <span className="grid size-8 place-items-center text-accent-text" title={t.downloads.downloaded}>
+        <ArrowCircleDownIcon size={17} weight="fill" aria-label={t.downloads.downloaded} />
+      </span>
+    );
+  }
+  const busy = status === "queued" || status === "downloading";
+  const label = busy ? t.downloads.cancel : status === "error" ? t.downloads.retry : t.downloads.download;
+  return (
+    <button
+      type="button"
+      onClick={() => void (busy ? remove([track.id]) : download([track]))}
+      aria-label={label}
+      title={label}
+      className={cn(
+        "grid size-8 place-items-center rounded-full transition-[opacity,transform] active:scale-90",
+        busy
+          ? "text-accent-text"
+          : status === "error"
+            ? "text-danger"
+            : "text-fg-2 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-fg",
+      )}
+    >
+      {busy ? (
+        <ProgressRing value={progress} size={16} />
+      ) : status === "error" ? (
+        <WarningCircleIcon size={17} weight="fill" />
+      ) : (
+        <ArrowCircleDownIcon size={17} />
+      )}
+    </button>
+  );
+}
 
 interface RowProps {
   track: Track;
@@ -24,6 +73,8 @@ const TrackRow = memo(function TrackRow({ track, position, onPlay, playlistId, s
   const isFavorite = useLibrary((s) => s.favorites.some((t) => t.id === track.id));
   const toggleFavorite = useLibrary((s) => s.toggleFavorite);
   const openMenu = useUi((s) => s.openMenu);
+  // No internet and not downloaded: the row is dimmed, and tapping it says why instead of failing to play.
+  const unavailable = useUnavailable(track.id);
   const t = useT();
 
   const menuAt = (e: MouseEvent) => {
@@ -46,8 +97,9 @@ const TrackRow = memo(function TrackRow({ track, position, onPlay, playlistId, s
     >
       <button
         type="button"
-        onClick={onPlay}
+        onClick={() => (unavailable ? toast(t.downloads.toasts.offlineTrack(track.title), "error") : onPlay())}
         aria-label={t.common.playX(track.title)}
+        title={unavailable ? t.downloads.notDownloaded : undefined}
         className="absolute inset-0 rounded-xl focus-visible:outline-offset-[-2px]"
       />
 
@@ -55,8 +107,8 @@ const TrackRow = memo(function TrackRow({ track, position, onPlay, playlistId, s
         {isCurrent ? <Equalizer live={isPlaying} /> : position + 1}
       </span>
 
-      <div className="pointer-events-none relative">
-        <Artwork src={track.thumb} className="size-11 rounded-[10px]" />
+      <div className={cn("pointer-events-none relative", unavailable && "opacity-45")}>
+        <Artwork src={track.thumb} trackId={track.id} className="size-11 rounded-[10px]" />
         {isCurrent && (
           <span className="absolute inset-0 grid place-items-center rounded-[10px] bg-black/45 md:hidden">
             <Equalizer live={isPlaying} />
@@ -64,19 +116,27 @@ const TrackRow = memo(function TrackRow({ track, position, onPlay, playlistId, s
         )}
       </div>
 
-      <div className="pointer-events-none min-w-0">
+      <div className={cn("pointer-events-none min-w-0", unavailable && "opacity-45")}>
         <p className={cn("truncate text-[15px] leading-tight font-medium", isCurrent ? "text-accent-text" : "text-fg")}>
           {track.title}
         </p>
         <p className="mt-0.5 flex items-center gap-1.5 truncate text-[13px] text-fg-2">
+          {capabilities.downloads && (
+            <span className="flex shrink-0 empty:hidden md:hidden">
+              <DownloadBadge id={track.id} size={13} />
+            </span>
+          )}
           {track.kind === "video" && <VideoCameraIcon size={13} className="shrink-0 text-fg-3" aria-label={t.common.video} />}
           <span className="truncate">{track.artist || t.common.youtube}</span>
         </p>
       </div>
 
-      {showAlbum && <p className="pointer-events-none hidden truncate text-sm text-fg-2 lg:block">{track.album ?? ""}</p>}
+      {showAlbum && (
+        <p className={cn("pointer-events-none hidden truncate text-sm text-fg-2 lg:block", unavailable && "opacity-45")}>{track.album ?? ""}</p>
+      )}
 
       <div className="relative z-10 hidden items-center gap-1 md:flex">
+        {capabilities.downloads && <RowDownload track={track} />}
         <button
           type="button"
           onClick={() => void toggleFavorite(track)}
@@ -136,7 +196,8 @@ export function TrackList({ tracks, context, playlistId, showAlbum: albumWanted 
           <span />
           <span>{t.trackList.title}</span>
           {showAlbum && <span className="hidden lg:block">{t.trackList.album}</span>}
-          <span className="flex w-[84px] justify-end pr-0.5">
+          {/* As wide as a row's buttons (download, favorite) plus its duration. */}
+          <span className={cn("flex justify-end pr-0.5", capabilities.downloads ? "w-[120px]" : "w-[84px]")}>
             <ClockIcon size={15} aria-label={t.trackList.duration} />
           </span>
           <span className="w-9" />

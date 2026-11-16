@@ -1,13 +1,16 @@
-import { CheckIcon, HeartIcon, PlayIcon, PlaylistIcon, VideoCameraIcon } from "@phosphor-icons/react";
+import { ArrowCircleDownIcon, CheckIcon, HeartIcon, PlayIcon, PlaylistIcon, VideoCameraIcon } from "@phosphor-icons/react";
 import { useState, type ReactNode } from "react";
 import { useT } from "../i18n";
+import { capabilities } from "../lib/api";
 import { cn, formatTime } from "../lib/format";
 import type { Track } from "../lib/types";
 import { selectCurrent, usePlayer } from "../player/player";
+import { useDownloads, useUnavailable } from "../stores/downloads";
 import { useLibrary } from "../stores/library";
-import { useUi } from "../stores/ui";
+import { toast, useUi } from "../stores/ui";
 import { Artwork } from "./Artwork";
 import { Equalizer } from "./Brand";
+import { DownloadBadge } from "./Download";
 
 export function Check({ on }: { on: boolean }) {
   return (
@@ -73,7 +76,7 @@ export function SelectedCount({ n, total }: { n: number; total: number }) {
 }
 
 /**
- * Sticky bar under the page header: select all, then play, favorite or add the selection to a playlist.
+ * Sticky bar under the page header: select all, then play, favorite, download or add the selection to a playlist.
  * With nothing selected, "Play all" plays every track.
  */
 export function SelectionBar({
@@ -93,6 +96,7 @@ export function SelectionBar({
 }) {
   const playList = usePlayer((s) => s.playList);
   const addFavorites = useLibrary((s) => s.addFavorites);
+  const download = useDownloads((s) => s.download);
   const openAddToPlaylist = useUi((s) => s.openAddToPlaylist);
   const toPlay = chosen.length ? chosen : all;
   const t = useT();
@@ -127,6 +131,9 @@ export function SelectionBar({
         />
         <Action icon={<HeartIcon size={16} />} label={t.common.favorite} disabled={!chosen.length} onClick={() => void addFavorites(chosen)} />
         <Action icon={<PlaylistIcon size={16} />} label={t.common.playlist} disabled={!chosen.length} onClick={() => openAddToPlaylist(chosen)} />
+        {capabilities.downloads && (
+          <Action icon={<ArrowCircleDownIcon size={16} />} label={t.downloads.download} disabled={!chosen.length} onClick={() => void download(chosen)} />
+        )}
       </div>
     </div>
   );
@@ -157,6 +164,8 @@ export function SelectableRow({
   const isCurrent = usePlayer((s) => selectCurrent(s)?.id === track.id);
   const isPlaying = usePlayer((s) => s.status === "playing" || s.status === "loading");
   const isFavorite = useLibrary((s) => s.favorites.some((f) => f.id === track.id));
+  // No internet and not downloaded: dimmed, and tapping the cover says why instead of failing to play.
+  const unavailable = useUnavailable(track.id);
   const t = useT();
 
   return (
@@ -176,8 +185,14 @@ export function SelectableRow({
         <span className="hidden w-6 shrink-0 text-center font-mono text-[13px] text-fg-3 tabular-nums md:block">{position}</span>
       )}
 
-      <button type="button" onClick={onPlay} aria-label={t.common.playX(track.title)} className="group/art relative shrink-0">
-        <Artwork src={track.thumb} className="size-11 rounded-[10px]" />
+      <button
+        type="button"
+        onClick={() => (unavailable ? toast(t.downloads.toasts.offlineTrack(track.title), "error") : onPlay())}
+        aria-label={t.common.playX(track.title)}
+        title={unavailable ? t.downloads.notDownloaded : undefined}
+        className={cn("group/art relative shrink-0", unavailable && "opacity-45")}
+      >
+        <Artwork src={track.thumb} trackId={track.id} className="size-11 rounded-[10px]" />
         <span
           className={cn(
             "absolute inset-0 grid place-items-center rounded-[10px] bg-black/45 text-white transition-opacity",
@@ -191,6 +206,7 @@ export function SelectableRow({
       <button type="button" onClick={onToggle} className={cn("min-w-0 flex-1 text-left", !selected && "opacity-60")}>
         <span className={cn("block truncate text-[15px] leading-tight font-medium", isCurrent && "text-accent-text")}>{track.title}</span>
         <span className="mt-0.5 flex items-center gap-1.5 text-[13px] text-fg-2">
+          {capabilities.downloads && <DownloadBadge id={track.id} size={13} />}
           {track.kind === "video" && <VideoCameraIcon size={13} className="shrink-0 text-fg-3" aria-label={t.common.video} />}
           <span className="truncate">
             {track.artist || t.common.youtube}

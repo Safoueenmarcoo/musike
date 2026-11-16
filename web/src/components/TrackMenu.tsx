@@ -1,4 +1,5 @@
 import {
+  ArrowCircleDownIcon,
   ArrowSquareOutIcon,
   HeartIcon,
   ListPlusIcon,
@@ -13,8 +14,10 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "re
 import { createPortal } from "react-dom";
 import { MD, useMediaQuery } from "../hooks/useMediaQuery";
 import { useT } from "../i18n";
+import { capabilities } from "../lib/api";
 import { cn } from "../lib/format";
 import { usePlayer } from "../player/player";
+import { useDownloads, useDownloadStatus } from "../stores/downloads";
 import { useLibrary } from "../stores/library";
 import { useUi } from "../stores/ui";
 import { Artwork } from "./Artwork";
@@ -42,6 +45,7 @@ export function TrackMenu() {
   const close = useUi((s) => s.closeMenu);
   const openAddToPlaylist = useUi((s) => s.openAddToPlaylist);
   const isFavorite = useLibrary((s) => (menu ? s.favorites.some((t) => t.id === menu.track.id) : false));
+  const download = useDownloadStatus(menu?.track.id);
   const isMd = useMediaQuery(MD);
   const box = useRef<HTMLDivElement>(null);
   const t = useT();
@@ -96,6 +100,31 @@ export function TrackMenu() {
       <Item icon={<PlaylistIcon size={18} />} onClick={() => openAddToPlaylist([menu.track])}>
         {t.trackMenu.addToPlaylist}
       </Item>
+      {capabilities.downloads && (
+        <Item
+          icon={
+            <ArrowCircleDownIcon
+              size={18}
+              weight={download === "done" ? "fill" : "regular"}
+              className={download === "done" ? "text-accent-text" : ""}
+            />
+          }
+          onClick={run(() => {
+            const { download: start, remove } = useDownloads.getState();
+            // Saved or on its way: this takes it back. Otherwise (never asked for, or failed) it starts the download.
+            if (download === "done" || download === "queued" || download === "downloading") void remove([menu.track.id]);
+            else void start([menu.track]);
+          })}
+        >
+          {download === "done"
+            ? t.downloads.remove
+            : download === "queued" || download === "downloading"
+              ? t.downloads.cancel
+              : download === "error"
+                ? t.downloads.retry
+                : t.downloads.download}
+        </Item>
+      )}
       {menu.playlistId && (
         <Item
           danger
@@ -149,7 +178,7 @@ export function TrackMenu() {
               <div className="island-core p-2">
                 <div className="mx-auto mt-1 mb-2 h-1 w-9 rounded-full bg-surface-4" />
                 <div className="flex items-center gap-3 px-3 pb-3">
-                  <Artwork src={menu.track.thumb} className="size-12 rounded-[10px]" />
+                  <Artwork src={menu.track.thumb} trackId={menu.track.id} className="size-12 rounded-[10px]" />
                   <div className="min-w-0">
                     <p className="truncate font-medium">{menu.track.title}</p>
                     <p className="truncate text-sm text-fg-2">{menu.track.artist}</p>

@@ -23,6 +23,35 @@ export interface Library {
   history: Track[];
 }
 
+/** A song saved for offline listening. */
+export interface DownloadItem {
+  track: Track;
+  /** Bytes on disk. */
+  size: number;
+  addedAt: number;
+  /** Whether its cover was saved too (see `downloadCover` in lib/api.ts). */
+  cover: boolean;
+}
+
+/** A download that is waiting, under way, or failed (it stays listed until retried or dismissed). */
+export interface DownloadJob {
+  track: Track;
+  status: "queued" | "downloading" | "error";
+  received: number;
+  /** 0 until the size is known. */
+  total: number;
+  /** Why it failed, in the app's language. */
+  error?: string;
+}
+
+export interface DownloadsInfo {
+  /** Newest first. */
+  items: DownloadItem[];
+  jobs: DownloadJob[];
+  /** Space the saved songs take. */
+  bytes: number;
+}
+
 export interface Genre {
   id: string;
   name: string;

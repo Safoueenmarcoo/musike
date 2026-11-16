@@ -1,4 +1,4 @@
-import type { AlbumCard, AlbumPage, ArtistPage, Genre, GenreArtist, GenrePage, Library, Playlist, Track } from "./types";
+import type { AlbumCard, AlbumPage, ArtistPage, DownloadsInfo, Genre, GenreArtist, GenrePage, Library, Playlist, Track } from "./types";
 
 /**
  * What the app needs from a backend. The web app and the desktop app talk to the Musike server over HTTP
@@ -90,6 +90,13 @@ export interface MusikeApi {
   addToPlaylist(id: string, t: Track | Track[]): Promise<Playlist>;
   removeFromPlaylist(id: string, trackId: string): Promise<Playlist>;
   importLibrary(backup: unknown, mode: "merge" | "replace"): Promise<ImportResult>;
+
+  /** Songs saved for offline listening, and the downloads under way. */
+  downloads(): Promise<DownloadsInfo>;
+  /** Queues tracks for download; answers at once, the progress comes with `downloads()`. */
+  download(tracks: Track[]): Promise<DownloadsInfo>;
+  /** Removes saved songs and cancels downloads under way; `null` removes them all. */
+  removeDownloads(ids: string[] | null): Promise<DownloadsInfo>;
 
   system(): Promise<SystemInfo>;
   updateYtdlp(channel: Channel): Promise<SystemJob>;

@@ -1,9 +1,11 @@
-import { existsSync } from "node:fs";
+import { createReadStream, existsSync } from "node:fs";
 import { createServer } from "node:net";
 import fastifyStatic from "@fastify/static";
 import Fastify from "fastify";
 import { ALBUM_ID, album, ARTIST_ID, artist, GENRE_ID, genre, genreArtists, genres, searchAlbums } from "./browse.js";
 import { config } from "./config.js";
+import * as downloads from "./downloads.js";
+import { downloadPath, fileDownloads } from "./downloadsFile.js";
 import * as library from "./library.js";
 import { fileStorage } from "./libraryFile.js";
 import { findVideoFor, radio, search, suggestions } from "./search.js";
@@ -42,6 +44,7 @@ export interface RunningServer {
 /** Builds the Musike HTTP server (API + web app) and starts listening. */
 export async function startServer(opts: StartOptions = {}): Promise<RunningServer> {
   library.useLibraryStorage(fileStorage());
+  downloads.useDownloadsBackend(fileDownloads());
   const found = await refreshTools();
   const app = Fastify({ logger: { level: process.env.LOG_LEVEL ?? "warn" } });
 
@@ -128,11 +131,26 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
 
   /** Resolves stream URLs ahead of time so the next track starts instantly. */
   app.post("/api/prepare/:id", async (req) => {
-    const r = await resolveStreams(videoId(req.params));
+    const id = videoId(req.params);
+    // A downloaded song has nothing to resolve (and may be all there is to play, with no internet).
+    const saved = await downloads.downloadOf(id);
+    if (saved) return { id, title: saved.track.title, duration: saved.track.duration, hasSdVideo: false };
+    const r = await resolveStreams(id);
     return { id: r.id, title: r.title, duration: r.duration, hasSdVideo: !!r.video };
   });
 
-  app.get("/api/stream/:id/audio", (req, reply) => proxyStream(req, reply, videoId(req.params), "audio"));
+  app.get("/api/stream/:id/audio", async (req, reply) => {
+    const id = videoId(req.params);
+    // A downloaded song plays from disk: at once, and with no internet at all.
+    const saved = await downloads.downloadOf(id);
+    if (saved) {
+      const file = downloadPath(saved.file);
+      if (existsSync(file)) return serveFile(req, reply, file, saved.mime);
+      // The file was deleted by hand: forget the download and stream the song again.
+      await downloads.forgetDownload(id);
+    }
+    return proxyStream(req, reply, id, "audio");
+  });
 
   app.get("/api/stream/:id/video", async (req, reply) => {
     const id = videoId(req.params);
@@ -141,6 +159,35 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
     const resolved = await resolveStreams(id);
     if (!resolved.video) return serveFile(req, reply, await downloadHd(id), "video/mp4");
     return proxyStream(req, reply, id, "video");
+  });
+
+  // Downloads: songs saved for offline listening
+
+  app.get("/api/downloads", (req) => downloads.getDownloads(langOf(req)));
+
+  /** Queues `{ tracks: [...] }` for download and answers at once; the app follows the progress with GET. */
+  app.post("/api/downloads", async (req) => {
+    const { tracks } = (req.body ?? {}) as { tracks?: unknown };
+    return downloads.enqueue(tracks, langOf(req));
+  });
+
+  /** `{ ids: [...] }` removes those songs (cancelling the ones still downloading); without `ids`, every download goes. */
+  app.post("/api/downloads/remove", async (req) => {
+    const { ids } = (req.body ?? {}) as { ids?: unknown };
+    if (ids !== undefined && !(Array.isArray(ids) && ids.every((id) => typeof id === "string" && VIDEO_ID.test(id)))) {
+      throw new HttpError(400, msg("invalidVideoId"));
+    }
+    return downloads.removeDownloads((ids as string[] | undefined) ?? null, langOf(req));
+  });
+
+  /** A downloaded song's cover, so the library still has its artwork with no internet. */
+  app.get("/api/downloads/:id/cover", async (req, reply) => {
+    const saved = await downloads.downloadOf(videoId(req.params));
+    const file = saved?.cover ? downloadPath(saved.cover) : null;
+    if (!file || !existsSync(file)) return reply.code(404).send({ error: tr(langOf(req), msg("routeNotFound")) });
+    reply.header("content-type", "image/jpeg");
+    reply.header("cache-control", "private, max-age=86400");
+    return reply.send(createReadStream(file));
   });
 
   // Library

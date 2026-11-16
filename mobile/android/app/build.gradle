@@ -16,7 +16,9 @@ android {
     namespace = "app.musike.android"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "app.musike.android"
+        // Not the original app's id (app.musike.android): Android only updates an app with an APK signed by the same
+        // key, and this fork signs with its own. With its own id it installs next to the original instead of failing.
+        applicationId "app.musike.plus"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode versionParts[0] * 10000 + versionParts[1] * 100 + versionParts[2]
