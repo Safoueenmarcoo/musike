@@ -108,7 +108,12 @@ export default function Collection({ kind }: Props) {
           <ShuffleIcon size={24} />
         </IconButton>
         {/* A playlist or the favorites can be kept on the device; the history changes with every song played. */}
-        {kind !== "history" && <DownloadAllButton tracks={tracks} />}
+        {kind !== "history" && (
+          <DownloadAllButton
+            tracks={tracks}
+            collection={kind === "favorites" ? { kind: "favorites" } : playlist ? { kind: "playlist", id: playlist.id } : undefined}
+          />
+        )}
         {kind === "playlist" && (
           <IconButton label={t.collection.more} size="lg" onClick={() => setMoreOpen(true)}>
             <DotsThreeIcon size={26} weight="bold" />

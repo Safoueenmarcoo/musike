@@ -21,6 +21,7 @@ import { legacyRedirect, NOW_PLAYING_HASH, paths } from "./lib/routes";
 import { usePlayer } from "./player/player";
 import { useDownloads } from "./stores/downloads";
 import { useLibrary } from "./stores/library";
+import { useSync } from "./stores/sync";
 import { openSettings, useSystem } from "./stores/system";
 import { toast, useUi } from "./stores/ui";
 import Album from "./views/Album";
@@ -45,6 +46,7 @@ export default function App() {
   const hasTrack = usePlayer((s) => s.queue.length > 0);
   const loadLibrary = useLibrary((s) => s.load);
   const loadDownloads = useDownloads((s) => s.load);
+  const loadSync = useSync((s) => s.load);
   const loadSystem = useSystem((s) => s.load);
   const main = useRef<HTMLElement>(null);
 
@@ -53,7 +55,8 @@ export default function App() {
   useEffect(() => {
     void loadLibrary();
     void loadDownloads();
-  }, [loadLibrary, loadDownloads]);
+    void loadSync();
+  }, [loadLibrary, loadDownloads, loadSync]);
 
   // Check yt-dlp shortly after start and say so once if something needs doing (not on Android: no yt-dlp there).
   useEffect(() => {

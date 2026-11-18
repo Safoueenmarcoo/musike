@@ -17,10 +17,20 @@ export interface Playlist {
   tracks: Track[];
 }
 
+/** What is kept downloaded on every device: whole collections (their new songs too) and single songs. */
+export interface Offline {
+  favorites: boolean;
+  /** Playlist ids. */
+  playlists: string[];
+  tracks: Track[];
+}
+
 export interface Library {
   favorites: Track[];
   playlists: Playlist[];
   history: Track[];
+  /** Missing in libraries from before 1.7: filled in from what was already downloaded. */
+  offline?: Offline;
 }
 
 import { tr, type Text } from "./i18n.js";

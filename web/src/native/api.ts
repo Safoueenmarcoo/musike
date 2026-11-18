@@ -14,6 +14,7 @@ import {
 import * as downloads from "../../../server/src/downloads";
 import { msg, tr, type MsgKey } from "../../../server/src/i18n";
 import * as library from "../../../server/src/library";
+import * as sync from "../../../server/src/sync";
 import { findVideoFor, radio, search, suggestions } from "../../../server/src/search";
 import { HttpError, VIDEO_ID } from "../../../server/src/types";
 import { getLang, getT } from "../i18n";
@@ -22,7 +23,8 @@ import type { DownloadsInfo } from "../lib/types";
 import "./android";
 import { androidDownloads, downloadsAvailable, downloadsReady, fileUrl } from "./downloads";
 import { media } from "./media";
-import { nativeStorage } from "./storage";
+import { nativeStorage, nativeStore } from "./storage";
+import { config } from "./shims/config";
 import { forgetUrl, resolveAudio } from "./streams";
 
 // The Android backend: the Musike server's own code (search, genres, artists, albums, library), running on the
@@ -30,9 +32,18 @@ import { forgetUrl, resolveAudio } from "./streams";
 export * from "../lib/apiTypes";
 
 library.useLibraryStorage(nativeStorage);
-if (downloadsAvailable) downloads.useDownloadsBackend(androidDownloads);
+if (downloadsAvailable) {
+  downloads.useDownloadsBackend(androidDownloads);
+  // What the library says to keep downloaded, including what failed last time; again when the connection is back.
+  void downloads.reconcile("all").catch(() => {});
+  addEventListener("online", () => void downloads.reconcile("all").catch(() => {}));
+}
+// The web view's own fetch: GitHub's API answers web pages (CORS), and it honours timeouts.
+sync.useSync({ storage: nativeStore, fetch: (...args) => globalThis.fetch(...args), api: config.githubApi });
+sync.startAutoSync();
+addEventListener("online", () => void sync.syncNow());
 
-const NO_DOWNLOADS: DownloadsInfo = { items: [], jobs: [], bytes: 0 };
+const NO_DOWNLOADS: DownloadsInfo = { items: [], jobs: [], bytes: 0, offline: { favorites: false, playlists: [] } };
 
 const fail = (status: number, key: MsgKey) => new ApiError(status, tr(getLang(), msg(key)));
 
@@ -126,6 +137,24 @@ export const api: MusikeApi = {
       : Promise.resolve(NO_DOWNLOADS),
   download: (list) => call(() => downloads.enqueue(list, getLang())),
   removeDownloads: (ids) => call(() => downloads.removeDownloads(ids, getLang())),
+  setOffline: (change) => call(() => downloads.setOffline(change, getLang())),
+
+  syncStatus: () => call(() => sync.syncStatus(getLang())),
+  syncConnect: (token) =>
+    call(async () => {
+      await sync.connect(token);
+      return sync.syncStatus(getLang());
+    }),
+  syncNow: () =>
+    call(async () => {
+      await sync.syncNow();
+      return sync.syncStatus(getLang());
+    }),
+  syncDisconnect: () =>
+    call(async () => {
+      await sync.disconnect();
+      return sync.syncStatus(getLang());
+    }),
 
   system: async () => SYSTEM,
   updateYtdlp: async () => {

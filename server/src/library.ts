@@ -1,5 +1,5 @@
 import { msg } from "./i18n.js";
-import { HttpError, VIDEO_ID, type Library, type Playlist, type Track } from "./types.js";
+import { HttpError, VIDEO_ID, type Library, type Offline, type Playlist, type Track } from "./types.js";
 
 // No Node-only imports here: the Android app runs this same module, with its own storage.
 
@@ -14,6 +14,13 @@ export interface LibraryStorage {
 let storage: LibraryStorage | null = null;
 let state: Library | null = null;
 let writeChain: Promise<void> = Promise.resolve();
+/** Told after every change, once it is saved: downloads follow the library, sync sends it on. */
+const listeners = new Set<() => void>();
+
+export function onLibraryChange(fn: () => void): () => void {
+  listeners.add(fn);
+  return () => listeners.delete(fn);
+}
 
 /** Set once at startup, before any request. */
 export function useLibraryStorage(s: LibraryStorage) {
@@ -28,14 +35,17 @@ async function load(): Promise<Library> {
   if (!storage) throw new Error("Library storage not configured");
   const json = await storage.read();
   state = json ? (JSON.parse(json) as Library) : { favorites: [], playlists: [], history: [] };
+  if (state.offline) state.offline = cleanOffline(state.offline, state.playlists);
   return state;
 }
 
 /** Serialized writes so concurrent requests never interleave. */
 function persist(): Promise<void> {
   const snapshot = JSON.stringify(state, null, 2);
-  writeChain = writeChain.then(() => storage!.write(snapshot));
-  return writeChain;
+  writeChain = writeChain.catch(() => {}).then(() => storage!.write(snapshot));
+  const saved = writeChain;
+  void saved.then(() => listeners.forEach((fn) => fn()), () => {});
+  return saved;
 }
 
 const str = (v: unknown, max: number) => (typeof v === "string" ? v.slice(0, max) : "");
@@ -127,6 +137,7 @@ export async function deletePlaylist(pid: string): Promise<void> {
   const lib = await load();
   findPlaylist(lib, pid);
   lib.playlists = lib.playlists.filter((p) => p.id !== pid);
+  if (lib.offline) lib.offline.playlists = lib.offline.playlists.filter((id) => id !== pid);
   await persist();
 }
 
@@ -174,7 +185,18 @@ function cleanTracks(input: unknown, limit = MAX_TRACKS): Track[] {
   return out;
 }
 
-function cleanLibrary(input: unknown): Library {
+function cleanOffline(input: unknown, playlists: Playlist[]): Offline {
+  const o = (input ?? {}) as Record<string, unknown>;
+  const ids = new Set(playlists.map((p) => p.id));
+  return {
+    favorites: o.favorites === true,
+    playlists: [...new Set(Array.isArray(o.playlists) ? o.playlists.filter((id): id is string => typeof id === "string" && ids.has(id)) : [])],
+    tracks: cleanTracks(o.tracks),
+  };
+}
+
+/** A library from outside (a backup, another device): only valid entries, without duplicates. */
+export function cleanLibrary(input: unknown): Library {
   const lib = (input ?? {}) as Record<string, unknown>;
   const playlists = (Array.isArray(lib.playlists) ? lib.playlists : []).slice(0, MAX_PLAYLISTS).flatMap((raw): Playlist[] => {
     const p = (raw ?? {}) as Record<string, unknown>;
@@ -185,7 +207,50 @@ function cleanLibrary(input: unknown): Library {
     const id = str(p.id, 64);
     return [{ id: /^[\w-]{8,64}$/.test(id) ? id : randomUUID(), name, createdAt: num(p.createdAt), updatedAt: num(p.updatedAt), tracks: cleanTracks(p.tracks) }];
   });
-  return { favorites: cleanTracks(lib.favorites), playlists, history: cleanTracks(lib.history, HISTORY_LIMIT) };
+  const clean: Library = { favorites: cleanTracks(lib.favorites), playlists, history: cleanTracks(lib.history, HISTORY_LIMIT) };
+  if (lib.offline !== undefined) clean.offline = cleanOffline(lib.offline, playlists);
+  return clean;
+}
+
+/** The whole library, as another device has it (sync). Checked like a backup. */
+export async function replaceLibrary(input: unknown): Promise<Library> {
+  await load();
+  state = cleanLibrary(input);
+  await persist();
+  return state;
+}
+
+export interface OfflineChange {
+  favorites?: boolean;
+  playlist?: { id: string; on: boolean };
+  addTracks?: Track[];
+  removeTracks?: string[];
+  /** Nothing kept downloaded any more. */
+  clear?: boolean;
+}
+
+/** What should stay downloaded. The downloads themselves follow (see downloads.ts). */
+export async function changeOffline(change: OfflineChange, fallback: Offline = { favorites: false, playlists: [], tracks: [] }): Promise<Offline> {
+  const lib = await load();
+  const o: Offline = lib.offline ? { ...lib.offline } : { ...fallback };
+  if (change.clear) Object.assign(o, { favorites: false, playlists: [], tracks: [] });
+  if (change.favorites !== undefined) o.favorites = change.favorites;
+  if (change.playlist) {
+    findPlaylist(lib, change.playlist.id);
+    o.playlists = o.playlists.filter((id) => id !== change.playlist!.id);
+    if (change.playlist.on) o.playlists.push(change.playlist.id);
+  }
+  if (change.removeTracks?.length) {
+    const gone = new Set(change.removeTracks);
+    o.tracks = o.tracks.filter((t) => !gone.has(t.id));
+  }
+  if (change.addTracks?.length) {
+    const have = new Set(o.tracks.map((t) => t.id));
+    o.tracks = [...o.tracks, ...change.addTracks.filter((t) => !have.has(t.id) && !!have.add(t.id))];
+  }
+  lib.offline = o;
+  await persist();
+  return o;
 }
 
 export interface ImportResult {
@@ -205,7 +270,9 @@ export async function importLibrary(input: unknown, mode: "merge" | "replace"): 
   const result: ImportResult = { playlistsAdded: 0, playlistsMerged: 0, tracksAdded: 0, favoritesAdded: 0 };
 
   if (mode === "replace") {
-    state = incoming;
+    // What this device keeps downloaded stays as it is (minus playlists that are gone).
+    state = { ...incoming, offline: lib.offline && cleanOffline(lib.offline, incoming.playlists) };
+    if (!state.offline) delete state.offline;
     result.playlistsAdded = incoming.playlists.length;
     result.favoritesAdded = incoming.favorites.length;
     result.tracksAdded = incoming.playlists.reduce((n, p) => n + p.tracks.length, 0);

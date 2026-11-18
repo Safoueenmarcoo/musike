@@ -48,6 +48,22 @@ export interface SystemInfo {
   job: SystemJob | null;
 }
 
+/** Sync between devices through a GitHub gist (see server/src/sync.ts). */
+export interface SyncStatus {
+  connected: boolean;
+  /** The GitHub account linked. */
+  login: string | null;
+  gistUrl: string | null;
+  lastSync: number | null;
+  syncing: boolean;
+  error: string | null;
+  /** Goes up whenever changes from another device land here. */
+  revision: number;
+}
+
+/** Keeps a whole collection downloaded, or stops. */
+export type OfflineCollection = { favorites: boolean } | { playlist: { id: string; on: boolean } };
+
 export interface Prepared {
   id: string;
   title: string;
@@ -97,6 +113,14 @@ export interface MusikeApi {
   download(tracks: Track[]): Promise<DownloadsInfo>;
   /** Removes saved songs and cancels downloads under way; `null` removes them all. */
   removeDownloads(ids: string[] | null): Promise<DownloadsInfo>;
+  /** Keeps a playlist or the favorites downloaded (songs added later too), or stops. */
+  setOffline(change: OfflineCollection): Promise<DownloadsInfo>;
+
+  syncStatus(): Promise<SyncStatus>;
+  /** Links this device to GitHub with a token and syncs. */
+  syncConnect(token: string): Promise<SyncStatus>;
+  syncNow(): Promise<SyncStatus>;
+  syncDisconnect(): Promise<SyncStatus>;
 
   system(): Promise<SystemInfo>;
   updateYtdlp(channel: Channel): Promise<SystemJob>;

@@ -90,12 +90,19 @@ export function DownloadButton({ track, size = "md", className }: { track: Track
   );
 }
 
+/** A playlist or the favorites: downloaded as a collection, so the songs added to it later download too. */
+export type Collection = { kind: "favorites" } | { kind: "playlist"; id: string };
+
 /**
- * Downloads a whole list (a playlist, the favorites, an album). While songs arrive it shows how far along the list
- * is, and tapping cancels what is left; once everything is saved it offers to remove the list from the device.
+ * Downloads a whole list. For a playlist or the favorites (`collection`) it is a switch: while on, the collection
+ * stays downloaded on every synced device, new songs included. For any other list (an album) it downloads those
+ * songs. While songs arrive it shows how far along the list is; tapping then stops.
  */
-export function DownloadAllButton({ tracks, variant = "icon" }: { tracks: Track[]; variant?: "icon" | "pill" }) {
+export function DownloadAllButton({ tracks, collection, variant = "icon" }: { tracks: Track[]; collection?: Collection; variant?: "icon" | "pill" }) {
   const ids = useMemo(() => [...new Set(tracks.map((track) => track.id))], [tracks]);
+  const kept = useDownloads((s) =>
+    !collection ? false : collection.kind === "favorites" ? s.offline.favorites : s.offline.playlists.includes(collection.id),
+  );
   const { saved, busy, portion } = useDownloads(
     useShallow((s) => {
       let saved = 0;
@@ -116,21 +123,33 @@ export function DownloadAllButton({ tracks, variant = "icon" }: { tracks: Track[
   );
   const download = useDownloads((s) => s.download);
   const remove = useDownloads((s) => s.remove);
+  const setCollection = useDownloads((s) => s.setCollection);
   const [confirming, setConfirming] = useState(false);
   const t = useT();
-  if (!capabilities.downloads || !ids.length) return null;
+  if (!capabilities.downloads || (!ids.length && !collection)) return null;
 
   const total = ids.length;
-  const complete = saved === total;
-  const label = complete
-    ? t.downloads.allDownloaded
-    : busy
-      ? t.downloads.cancelAll
-      : saved
-        ? t.downloads.downloadMissing(total - saved)
-        : t.downloads.downloadAll;
+  const complete = collection ? kept && saved === total : saved === total;
+  const on = collection ? kept : complete || busy > 0;
+  const label = collection
+    ? kept
+      ? busy
+        ? t.downloads.stopKeeping
+        : t.downloads.keptOffline
+      : t.downloads.download
+    : complete
+      ? t.downloads.allDownloaded
+      : busy
+        ? t.downloads.cancelAll
+        : saved
+          ? t.downloads.downloadMissing(total - saved)
+          : t.downloads.downloadAll;
+
+  const toggle = (value: boolean) =>
+    setCollection(collection!.kind === "favorites" ? { favorites: value } : { playlist: { id: collection!.id, on: value } });
 
   const onClick = () => {
+    if (collection) return kept ? setConfirming(true) : void toggle(true);
     if (complete) return setConfirming(true);
     if (busy) {
       const { active } = useDownloads.getState();
@@ -142,7 +161,7 @@ export function DownloadAllButton({ tracks, variant = "icon" }: { tracks: Track[
   const glyph = busy ? (
     <ProgressRing value={portion} size={variant === "pill" ? 18 : 23} />
   ) : (
-    <ArrowCircleDownIcon size={variant === "pill" ? 18 : 24} weight={complete ? "fill" : "regular"} />
+    <ArrowCircleDownIcon size={variant === "pill" ? 18 : 24} weight={complete || (collection && kept) ? "fill" : "regular"} />
   );
 
   return (
@@ -155,20 +174,20 @@ export function DownloadAllButton({ tracks, variant = "icon" }: { tracks: Track[
           aria-label={label}
           className={cn(
             "flex h-11 items-center gap-2 rounded-full px-4 text-sm font-medium transition-transform active:scale-[0.97]",
-            complete || busy ? "bg-accent-soft text-accent-text" : "bg-surface-3 hover:bg-surface-4",
+            on ? "bg-accent-soft text-accent-text" : "bg-surface-3 hover:bg-surface-4",
           )}
         >
           {glyph}
           {complete ? t.downloads.downloaded : busy ? t.downloads.downloadingOf(saved, total) : t.downloads.download}
         </button>
       ) : (
-        <IconButton label={label} size="lg" active={complete || busy > 0} onClick={onClick}>
+        <IconButton label={label} size="lg" active={on} onClick={onClick}>
           {glyph}
         </IconButton>
       )}
 
       <Modal open={confirming} onClose={() => setConfirming(false)} title={t.downloads.removeTitle}>
-        <p className="text-sm text-fg-2">{t.downloads.removeBody(saved)}</p>
+        <p className="text-sm text-fg-2">{collection ? t.downloads.stopBody(saved) : t.downloads.removeBody(saved)}</p>
         <div className="mt-5 flex justify-end gap-2">
           <button type="button" onClick={() => setConfirming(false)} className="h-11 rounded-full px-5 text-sm font-medium text-fg-2 hover:text-fg">
             {t.common.cancel}
@@ -177,7 +196,7 @@ export function DownloadAllButton({ tracks, variant = "icon" }: { tracks: Track[
             type="button"
             onClick={() => {
               setConfirming(false);
-              void remove(ids);
+              void (collection ? toggle(false) : remove(ids));
             }}
             className="h-11 rounded-full bg-danger px-6 text-sm font-semibold text-white"
           >

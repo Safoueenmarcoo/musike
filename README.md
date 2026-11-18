@@ -24,13 +24,14 @@ Runs as a **Windows**, **macOS** and **Linux** app, as an **Android**, **Android
 
 ---
 
-> **This is a fork** of [Ernani1234/musike](https://github.com/Ernani1234/musike) that adds **offline downloads**: save songs, playlists and albums on the device and play them with no internet. Details in [Offline downloads](#offline-downloads). Its builds, a Windows installer and an Android APK named **Musike+**, are on [this fork's releases page](https://github.com/Safoueenmarcoo/musike/releases). The download links further down point to the original project.
+> **This is a fork** of [Ernani1234/musike](https://github.com/Ernani1234/musike) that adds **offline downloads** (save songs, playlists and albums on the device and play them with no internet) and **sync between devices** through GitHub. Details in [Offline downloads](#offline-downloads) and [Sync between devices](#sync-between-devices). Its builds, a Windows installer and an Android APK named **Musike+**, are on [this fork's releases page](https://github.com/Safoueenmarcoo/musike/releases). The download links further down point to the original project.
 
 ## Contents
 
 - [What it is](#what-it-is)
 - [Features](#features)
 - [Offline downloads](#offline-downloads)
+- [Sync between devices](#sync-between-devices)
 - [Screenshots](#screenshots)
 - [How it works](#how-it-works)
 - [Installation](#installation)
@@ -108,6 +109,7 @@ Musike started from the idea behind the old Discord music bots: a server that fe
 ## Offline downloads
 
 - **Download** a song from its row or its menu, a playlist or your Favorites with the button next to Shuffle, an album from its page, or any selection of tracks from the bar above a list.
+- A **downloaded playlist** (or Favorites) stays downloaded: songs added to it later download by themselves, songs taken out of it are removed. Tap its button again to stop.
 - Downloaded songs carry a mark and play from the device: at once, and with no internet. **Library > Downloads** lists them with the space they take; removing one is in its menu, removing them all in **Settings > Downloads**.
 - **With no connection** the app says so, dims what isn't downloaded and skips it in the queue. The covers of downloaded songs are saved too, so the library keeps its artwork.
 - A download that fails says why and can be tried again; a dropped connection is picked up where it stopped.
@@ -123,6 +125,16 @@ Where the songs are kept:
 Each song is the audio stream the player would get, saved as `<video id>.m4a` (AAC) or `.webm` (Opus), with its cover as `<video id>.jpg` and `index.json` listing what is there. In a browser pointed at a Musike server, downloads live on the server, not on the device holding the browser. The iPhone app doesn't download yet.
 
 **Building this fork.** Pushing a tag such as `v1.6.0` runs the Release workflow, which attaches the Windows installer and the Android APK to a draft release. The APK is signed with the key in the repository secrets named at the top of [release.yml](.github/workflows/release.yml): always the same one, or a later APK can't install over the one on the phone. The Android app has its own id (`app.musike.plus`) and name (Musike+), so it installs next to the original app instead of clashing with it; move a library between the two with [backup to a file](#moving-your-library-backup).
+
+## Sync between devices
+
+The desktop app, the Android app and any Musike server can share one library: playlists, favorites, history, and what is downloaded (a playlist downloaded on the computer downloads on the phone too).
+
+1. On GitHub, [create a token with only the "gist" permission](https://github.com/settings/tokens/new?scopes=gist&description=Musike%20sync).
+2. In Musike, **Settings > Sync between devices**, paste it and tap **Link with GitHub**.
+3. Paste the same token on the other devices.
+
+The library is kept in a secret gist named `musike-sync.json` on that account (hidden, but anyone with its link can read it). Each device syncs when it starts, a few seconds after each change, every two minutes, and when the connection comes back. Changes made on two devices at once are both kept; a song removed on one device is removed everywhere. The token stays on the device (`sync.json` in the data folder) and is never shown again; **Unlink** removes it.
 
 ## Screenshots
 
@@ -378,6 +390,7 @@ Server environment variables (all optional):
 | `YTDLP_EXTRA_ARGS` | | Extra flags, e.g. `--cookies-from-browser firefox` |
 | `MUSIKE_DATA_DIR` | `server/data` (`/data` in Docker) | Where `library.json` lives |
 | `MUSIKE_DOWNLOADS_DIR` | `downloads` inside the data folder | Songs downloaded for offline listening |
+| `MUSIKE_GITHUB_API` | `https://api.github.com` | GitHub's API, for sync |
 | `MUSIKE_CACHE_DIR` | `server/cache` (`/cache` in Docker) | Downloaded HD videos |
 | `MUSIKE_CACHE_MAX_MB` | `2048` | Video cache limit (least recently played go first) |
 | `MUSIKE_BIN_DIR` | | Private tools folder (the desktop app uses `%APPDATA%\Musike\bin`) |
@@ -415,6 +428,10 @@ Every route answers JSON. Errors look like `{ "error": "message", "code"?: "tool
 | `POST` | `/api/downloads` | Queues tracks for download (`{ tracks }`) |
 | `POST` | `/api/downloads/remove` | Removes downloads or cancels them (`{ ids }`; everything without `ids`) |
 | `GET` | `/api/downloads/:id/cover` | A downloaded song's saved cover |
+| `POST` | `/api/downloads/offline` | Keeps a collection downloaded, new songs included (`{ favorites }` or `{ playlist: { id, on } }`) |
+| `GET` / `DELETE` | `/api/sync` | Sync status / unlink this device |
+| `POST` | `/api/sync` | Links with GitHub (`{ token }`) and syncs |
+| `POST` | `/api/sync/now` | Syncs now |
 | `GET` | `/api/system` | yt-dlp, Deno and FFmpeg versions and downloads |
 | `POST` | `/api/system/ytdlp` | Updates or installs yt-dlp (`{ channel: "stable" \| "nightly" }`) |
 

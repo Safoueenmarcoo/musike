@@ -7,7 +7,8 @@ import { config } from "./config.js";
 import * as downloads from "./downloads.js";
 import { downloadPath, fileDownloads } from "./downloadsFile.js";
 import * as library from "./library.js";
-import { fileStorage } from "./libraryFile.js";
+import { fileStorage, fileStore } from "./libraryFile.js";
+import * as sync from "./sync.js";
 import { findVideoFor, radio, search, suggestions } from "./search.js";
 import { proxyStream, serveFile } from "./stream.js";
 import { langOf, msg, tr } from "./i18n.js";
@@ -45,6 +46,7 @@ export interface RunningServer {
 export async function startServer(opts: StartOptions = {}): Promise<RunningServer> {
   library.useLibraryStorage(fileStorage());
   downloads.useDownloadsBackend(fileDownloads());
+  sync.useSync({ storage: fileStore(), api: config.githubApi });
   const found = await refreshTools();
   const app = Fastify({ logger: { level: process.env.LOG_LEVEL ?? "warn" } });
 
@@ -180,6 +182,17 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
     return downloads.removeDownloads((ids as string[] | undefined) ?? null, langOf(req));
   });
 
+  /** Keeps a whole collection downloaded, or stops: `{ favorites: boolean }` or `{ playlist: { id, on } }`. */
+  app.post("/api/downloads/offline", async (req) => {
+    const body = (req.body ?? {}) as { favorites?: unknown; playlist?: { id?: unknown; on?: unknown } };
+    const change: { favorites?: boolean; playlist?: { id: string; on: boolean } } = {};
+    if (typeof body.favorites === "boolean") change.favorites = body.favorites;
+    if (body.playlist && typeof body.playlist.id === "string" && typeof body.playlist.on === "boolean") {
+      change.playlist = { id: body.playlist.id, on: body.playlist.on };
+    }
+    return downloads.setOffline(change, langOf(req));
+  });
+
   /** A downloaded song's cover, so the library still has its artwork with no internet. */
   app.get("/api/downloads/:id/cover", async (req, reply) => {
     const saved = await downloads.downloadOf(videoId(req.params));
@@ -188,6 +201,26 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
     reply.header("content-type", "image/jpeg");
     reply.header("cache-control", "private, max-age=86400");
     return reply.send(createReadStream(file));
+  });
+
+  // Sync between devices, through a GitHub gist
+
+  app.get("/api/sync", (req) => sync.syncStatus(langOf(req)));
+
+  /** `{ token }`: links this Musike to the user's GitHub and syncs. */
+  app.post("/api/sync", async (req) => {
+    await sync.connect(((req.body ?? {}) as { token?: unknown }).token);
+    return sync.syncStatus(langOf(req));
+  });
+
+  app.post("/api/sync/now", async (req) => {
+    await sync.syncNow();
+    return sync.syncStatus(langOf(req));
+  });
+
+  app.delete("/api/sync", async (req) => {
+    await sync.disconnect();
+    return sync.syncStatus(langOf(req));
   });
 
   // Library
@@ -267,7 +300,17 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
   await app.listen({ port, host });
 
   pruneCache().catch(() => {});
-  return { port, tools: found, close: () => app.close() };
+  // Songs the library says to keep downloaded, including any that failed last time.
+  void downloads.reconcile("all").catch(() => {});
+  sync.startAutoSync();
+  return {
+    port,
+    tools: found,
+    close: () => {
+      sync.stopAutoSync();
+      return app.close();
+    },
+  };
 }
 
 /** First free port from `start` (up to 10 tries), so a second copy or a dev server doesn't block launch. */

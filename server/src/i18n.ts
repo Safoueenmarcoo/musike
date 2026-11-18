@@ -57,6 +57,10 @@ const en = {
   songDownloadFailed: "Couldn't download this song. Try again.",
   downloadIncomplete: "The download stopped before the end. Try again.",
   noSpace: "There's no space left on this device to save the song.",
+  syncNoToken: "Paste a GitHub token first.",
+  syncBadToken: "GitHub didn't accept this token. Check that it has Gist access and hasn't expired.",
+  syncFailed: "Sync failed (GitHub answered {status}). It tries again by itself.",
+  syncOffline: "No connection: it syncs when you're back online.",
 };
 
 export type MsgKey = keyof typeof en;
@@ -112,6 +116,10 @@ const pt: Record<MsgKey, string> = {
   songDownloadFailed: "Não foi possível baixar esta música. Tente de novo.",
   downloadIncomplete: "O download parou antes do fim. Tente de novo.",
   noSpace: "Não há espaço neste dispositivo para salvar a música.",
+  syncNoToken: "Cole um token do GitHub primeiro.",
+  syncBadToken: "O GitHub não aceitou este token. Verifique se ele tem acesso a Gists e se não expirou.",
+  syncFailed: "A sincronização falhou (o GitHub respondeu {status}). Ela tenta de novo sozinha.",
+  syncOffline: "Sem conexão: sincroniza quando você voltar a ficar online.",
 };
 
 const CATALOG: Record<Lang, Record<MsgKey, string>> = { en, "pt-BR": pt };

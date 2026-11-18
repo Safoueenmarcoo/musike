@@ -17,6 +17,7 @@ const devTransport = (globalThis as { __musikeTransport?: Transport }).__musikeT
 
 export const config = {
   lang: "en",
+  githubApi: "https://api.github.com",
   location: region(),
   fetch: Capacitor.isNativePlatform() ? nativeFetch : devTransport ? makeFetch(devTransport) : undefined,
 };

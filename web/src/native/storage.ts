@@ -19,6 +19,17 @@ async function readText(path: string): Promise<string | null> {
  * so a crash mid-write can't leave a half-written library; if it happens between the two steps, the temp file
  * is the newest complete copy.
  */
+/** Small named files next to the library (sync's token and its last merged library). */
+export const nativeStore = {
+  read: (name: string) => readText(name),
+  write: async (name: string, text: string) => {
+    await Filesystem.writeFile({ path: name, data: text, ...where });
+  },
+  remove: async (name: string) => {
+    await Filesystem.deleteFile({ path: name, directory: Directory.Data }).catch(() => {});
+  },
+};
+
 export const nativeStorage: LibraryStorage = {
   read: async () => (await readText(FILE)) ?? (await readText(TMP)),
   write: async (json) => {

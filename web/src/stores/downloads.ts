@@ -1,8 +1,9 @@
 import { create } from "zustand";
 import { useOnline } from "../hooks/useOnline";
 import { getT } from "../i18n";
-import { api, capabilities, downloadCover } from "../lib/api";
+import { api, capabilities, downloadCover, type OfflineCollection } from "../lib/api";
 import type { DownloadItem, DownloadJob, DownloadsInfo, Track } from "../lib/types";
+import { useLibrary } from "./library";
 import { toast } from "./ui";
 
 /** Where a track stands: not saved, waiting its turn, on its way, failed, or saved on this device. */
@@ -14,6 +15,8 @@ interface DownloadsState {
   /** Downloads waiting, under way or failed. */
   jobs: DownloadJob[];
   bytes: number;
+  /** Collections kept downloaded (on every synced device): their new songs download by themselves. */
+  offline: DownloadsInfo["offline"];
   /** The same two lists by track id, for the many rows that ask about one track. */
   saved: Record<string, DownloadItem>;
   active: Record<string, DownloadJob>;
@@ -27,6 +30,17 @@ interface DownloadsState {
   /** Removes saved songs, or cancels (or dismisses) their downloads. */
   remove: (ids: string[]) => Promise<void>;
   removeAll: () => Promise<void>;
+  /** Keeps a playlist or the favorites downloaded, songs added later included, or stops. */
+  setCollection: (change: OfflineCollection) => Promise<void>;
+}
+
+/** The downloaded collection that keeps a song on the device, if any: its name, or "favorites". */
+export function keeperOf(id: string): { kind: "favorites" } | { kind: "playlist"; name: string } | null {
+  const { offline } = useDownloads.getState();
+  const lib = useLibrary.getState();
+  if (offline.favorites && lib.favorites.some((t) => t.id === id)) return { kind: "favorites" };
+  const p = lib.playlists.find((p) => offline.playlists.includes(p.id) && p.tracks.some((t) => t.id === id));
+  return p ? { kind: "playlist", name: p.name } : null;
 }
 
 const running = (jobs: DownloadJob[]) => jobs.filter((j) => j.status !== "error");
@@ -51,7 +65,7 @@ export const useDownloads = create<DownloadsState>((set, get) => {
       if (track.thumb) coverByUrl[track.thumb] = local;
       if (track.art) coverByUrl[track.art] = local;
     }
-    set({ items: info.items, jobs: info.jobs, bytes: info.bytes, saved, active, covers, coverByUrl, status: "ready" });
+    set({ items: info.items, jobs: info.jobs, bytes: info.bytes, offline: info.offline, saved, active, covers, coverByUrl, status: "ready" });
     if (before.status !== "ready") {
       if (running(info.jobs).length) watch();
       return;
@@ -89,6 +103,7 @@ export const useDownloads = create<DownloadsState>((set, get) => {
     items: [],
     jobs: [],
     bytes: 0,
+    offline: { favorites: false, playlists: [] },
     saved: {},
     active: {},
     covers: {},
@@ -126,6 +141,14 @@ export const useDownloads = create<DownloadsState>((set, get) => {
 
     remove: async (ids) => {
       if (!ids.length) return;
+      // A song a downloaded playlist (or the favorites) holds stays as long as that collection is downloaded.
+      if (ids.length === 1 && get().saved[ids[0]]) {
+        const keeper = keeperOf(ids[0]);
+        if (keeper) {
+          const t = getT().downloads.toasts;
+          return toast(keeper.kind === "favorites" ? t.keptByFavorites : t.keptBy(keeper.name));
+        }
+      }
       const { saved, active } = get();
       const wasSaved = ids.filter((id) => saved[id]).length;
       const wasRunning = ids.filter((id) => active[id] && active[id].status !== "error").length;
@@ -136,6 +159,17 @@ export const useDownloads = create<DownloadsState>((set, get) => {
         const t = getT().downloads.toasts;
         if (wasSaved) toast(wasSaved === 1 ? t.removed : t.removedMany(wasSaved));
         else if (wasRunning) toast(t.cancelled);
+      } catch (e) {
+        toast((e as Error).message, "error");
+      }
+    },
+
+    setCollection: async (change) => {
+      try {
+        const info = await api.setOffline(change);
+        const on = "favorites" in change ? change.favorites : change.playlist.on;
+        if (on) toast(getT().downloads.toasts.collectionOn);
+        apply(info);
       } catch (e) {
         toast((e as Error).message, "error");
       }
@@ -185,4 +219,14 @@ export function useThumb(track: Track): string {
   const online = useOnline();
   const local = useDownloads((s) => s.covers[track.id]);
   return !online && local ? local : track.thumb;
+}
+
+// The library changed (a song added to a downloaded playlist, here or through sync): new downloads may have started.
+if (capabilities.downloads) {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  useLibrary.subscribe((now, before) => {
+    if (now.playlists === before.playlists && now.favorites === before.favorites) return;
+    clearTimeout(timer);
+    timer = setTimeout(() => void useDownloads.getState().load(), 500);
+  });
 }

@@ -9,6 +9,7 @@ import {
   type SystemInfo,
   type SystemJob,
   type SystemMedia,
+  type SyncStatus,
 } from "./apiTypes";
 import type { AlbumCard, AlbumPage, ArtistPage, DownloadsInfo, Genre, GenreArtist, GenrePage, Library, Playlist, Track } from "./types";
 
@@ -81,6 +82,12 @@ export const api: MusikeApi = {
   download: (tracks: Track[]) => request<DownloadsInfo>("/api/downloads", { method: "POST", json: { tracks } }),
   removeDownloads: (ids: string[] | null) =>
     request<DownloadsInfo>("/api/downloads/remove", { method: "POST", json: ids ? { ids } : {} }),
+  setOffline: (change) => request<DownloadsInfo>("/api/downloads/offline", { method: "POST", json: change }),
+
+  syncStatus: () => request<SyncStatus>("/api/sync"),
+  syncConnect: (token: string) => request<SyncStatus>("/api/sync", { method: "POST", json: { token } }),
+  syncNow: () => request<SyncStatus>("/api/sync/now", { method: "POST" }),
+  syncDisconnect: () => request<SyncStatus>("/api/sync", { method: "DELETE" }),
 
   system: () => request<SystemInfo>("/api/system"),
   updateYtdlp: (channel: Channel) => request<SystemJob>("/api/system/ytdlp", { method: "POST", json: { channel } }),
