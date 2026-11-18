@@ -32,6 +32,7 @@ Runs as a **Windows**, **macOS** and **Linux** app, as an **Android**, **Android
 - [Features](#features)
 - [Offline downloads](#offline-downloads)
 - [Sync between devices](#sync-between-devices)
+- [Control playback from another device](#control-playback-from-another-device)
 - [Screenshots](#screenshots)
 - [How it works](#how-it-works)
 - [Installation](#installation)
@@ -135,6 +136,17 @@ The desktop app, the Android app and any Musike server can share one library: pl
 3. Paste the same token on the other devices.
 
 The library is kept in a secret gist named `musike-sync.json` on that account (hidden, but anyone with its link can read it). Each device syncs when it starts, a few seconds after each change, every two minutes, and when the connection comes back. Changes made on two devices at once are both kept; a song removed on one device is removed everywhere. The token stays on the device (`sync.json` in the data folder) and is never shown again; **Unlink** removes it.
+
+## Control playback from another device
+
+Once two devices are linked with the same token, each one shows what the other is playing in a bar above the player, with play/pause and next (and previous on the computer). **Play here** moves the current song to the device you're holding, at the same spot. Only one device plays at a time: starting a song on one pauses the others. **Settings > Sync between devices** lists the devices it can see.
+
+The devices find each other two ways:
+
+- **Same Wi-Fi.** The desktop app opens port 4285 (or the next free one up to 4294) for the other devices on the network. Windows asks about it the first time: allow Musike on private networks. Commands this way arrive within about a second.
+- **Over the internet.** Otherwise messages go through [ntfy.sh](https://ntfy.sh), a free public relay, on a topic named after a hash of the token and sealed with a key also made from the token, so the relay can't read them. ntfy.sh allows about 250 messages a day from one connection; past that, remote control pauses until the next day and the device list says so. Set `MUSIKE_RELAY_URL` to use your own ntfy server.
+
+A device can only be controlled while Musike is open on it. On Android, a phone with the app in the background may stop answering after a while; open it again and it reappears. Play here moves the song, not the queue.
 
 ## Screenshots
 
@@ -391,6 +403,10 @@ Server environment variables (all optional):
 | `MUSIKE_DATA_DIR` | `server/data` (`/data` in Docker) | Where `library.json` lives |
 | `MUSIKE_DOWNLOADS_DIR` | `downloads` inside the data folder | Songs downloaded for offline listening |
 | `MUSIKE_GITHUB_API` | `https://api.github.com` | GitHub's API, for sync |
+| `MUSIKE_RELAY_URL` | `https://ntfy.sh` | ntfy server for remote control over the internet |
+| `MUSIKE_CONNECT_LAN` | `1` | `0` turns off the port the other devices on the Wi-Fi use |
+| `MUSIKE_CONNECT_HOST` | `0.0.0.0` | Address of that port |
+| `MUSIKE_DEVICE_NAME` | computer name | Name the other devices show |
 | `MUSIKE_CACHE_DIR` | `server/cache` (`/cache` in Docker) | Downloaded HD videos |
 | `MUSIKE_CACHE_MAX_MB` | `2048` | Video cache limit (least recently played go first) |
 | `MUSIKE_BIN_DIR` | | Private tools folder (the desktop app uses `%APPDATA%\Musike\bin`) |
@@ -432,6 +448,10 @@ Every route answers JSON. Errors look like `{ "error": "message", "code"?: "tool
 | `GET` / `DELETE` | `/api/sync` | Sync status / unlink this device |
 | `POST` | `/api/sync` | Links with GitHub (`{ token }`) and syncs |
 | `POST` | `/api/sync/now` | Syncs now |
+| `GET` | `/api/connect?since=` | Other devices and what they play (waits up to 25 s for a change after `since`) |
+| `POST` | `/api/connect/state` | Tells the other devices what this one plays |
+| `POST` | `/api/connect/command` | Sends play, pause, next, previous or seek to a device (`{ to, action, position? }`) |
+| `POST` | `/musike-connect` | Port 4285 only: sealed messages from devices on the same network |
 | `GET` | `/api/system` | yt-dlp, Deno and FFmpeg versions and downloads |
 | `POST` | `/api/system/ytdlp` | Updates or installs yt-dlp (`{ channel: "stable" \| "nightly" }`) |
 

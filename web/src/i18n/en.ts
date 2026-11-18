@@ -475,7 +475,7 @@ export const en = {
 
   sync: {
     title: "Sync between devices",
-    body: "Your playlists, favorites, history and downloads stay the same on the computer and the phone. They meet in a secret gist on your GitHub.",
+    body: "Your playlists, favorites, history and downloads stay the same on the computer and the phone, and each one shows and controls what the other plays. They meet in a secret gist on your GitHub.",
     step1: "On GitHub,",
     step1Link: "create a token with Gist access",
     step2: "Copy it and paste it here.",
@@ -494,6 +494,20 @@ export const en = {
     unlink: "Unlink",
     unlinkConfirm: "Unlink now",
     unlinkBody: "This device stops syncing and keeps its library as it is. The other devices and the gist aren't touched.",
+  },
+
+  remote: {
+    playingOn: (name: string) => `Playing on ${name}`,
+    pausedOn: (name: string) => `Paused on ${name}`,
+    playHere: "Play here",
+    controls: (name: string) => `Controls for ${name}`,
+    notAnswering: (name: string) => `${name} isn't answering. Is Musike open there?`,
+    devices: "Devices online",
+    thisDevice: (name: string) => `This device: ${name}`,
+    none: "No other device right now. Open Musike on another linked device and it shows up here.",
+    viaWifi: "same Wi-Fi",
+    viaInternet: "over the internet",
+    limited: "The free relay's daily limit is used up: devices on other networks show up again tomorrow. On the same Wi-Fi everything still works.",
   },
 
   toasts: {

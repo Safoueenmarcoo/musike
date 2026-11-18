@@ -9,6 +9,9 @@ import { downloadPath, fileDownloads } from "./downloadsFile.js";
 import * as library from "./library.js";
 import { fileStorage, fileStore } from "./libraryFile.js";
 import * as sync from "./sync.js";
+import * as connect from "./connect.js";
+import { lanUrls, startLanHost, stopLanHost } from "./connectLan.js";
+import { hostname } from "node:os";
 import { findVideoFor, radio, search, suggestions } from "./search.js";
 import { proxyStream, serveFile } from "./stream.js";
 import { langOf, msg, tr } from "./i18n.js";
@@ -223,6 +226,30 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
     return sync.syncStatus(langOf(req));
   });
 
+  // Remote playback between devices (connect.ts)
+
+  /** Long poll: answers when something newer than `since` happens (a device appears, a state, a command), or after 25 s. */
+  app.get("/api/connect", async (req) => {
+    const since = Number((req.query as { since?: string }).since ?? 0);
+    return connect.waitConnect(Number.isFinite(since) ? since : 0);
+  });
+
+  /** This device's playback, sent by the app when it changes. */
+  app.post("/api/connect/state", async (req) => {
+    const { state } = (req.body ?? {}) as { state?: unknown };
+    await connect.setLocalState(cleanPlayState(state));
+    return { ok: true };
+  });
+
+  app.post("/api/connect/command", async (req) => {
+    const { to, action, position } = (req.body ?? {}) as { to?: unknown; action?: unknown; position?: unknown };
+    if (typeof to !== "string" || !["play", "pause", "next", "previous", "seek"].includes(action as string)) {
+      throw new HttpError(400, msg("routeNotFound"));
+    }
+    const answered = await connect.sendCommand(to, action as connect.Action, typeof position === "number" ? position : undefined);
+    return { answered };
+  });
+
   // Library
 
   app.get("/api/library", () => library.getLibrary());
@@ -303,13 +330,45 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
   // Songs the library says to keep downloaded, including any that failed last time.
   void downloads.reconcile("all").catch(() => {});
   sync.startAutoSync();
+  // Remote playback runs while this device is linked (it shares the sync token's secret).
+  const startRemote = async (token: string | null) => {
+    if (!token) return connect.stopConnect();
+    const lan = process.env.MUSIKE_CONNECT_LAN !== "0" && (await startLanHost()) > 0;
+    await connect.startConnect({
+      token,
+      store: fileStore(),
+      name: config.deviceName || hostname() || "Computer",
+      kind: config.binDir ? "desktop" : "web",
+      relayUrl: config.relayUrl,
+      fetch: (...args) => fetch(...args),
+      ...(lan ? { host: { urls: lanUrls } } : {}),
+    });
+  };
+  const unlink = sync.onSyncLink((token) => void startRemote(token).catch(() => {}));
+  void sync.syncToken().then(startRemote).catch(() => {});
   return {
     port,
     tools: found,
     close: () => {
       sync.stopAutoSync();
+      unlink();
+      connect.stopConnect();
+      stopLanHost();
       return app.close();
     },
+  };
+}
+
+/** A play state from the app, checked: a valid track, a status, numbers. */
+function cleanPlayState(input: unknown): connect.PlayState | null {
+  if (!input || typeof input !== "object") return null;
+  const s = input as Record<string, unknown>;
+  const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : 0);
+  return {
+    track: library.sanitizeTrack(s.track),
+    status: s.status === "playing" ? "playing" : "paused",
+    position: num(s.position),
+    duration: num(s.duration),
   };
 }
 

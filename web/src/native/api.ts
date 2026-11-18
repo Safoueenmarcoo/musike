@@ -15,12 +15,14 @@ import * as downloads from "../../../server/src/downloads";
 import { msg, tr, type MsgKey } from "../../../server/src/i18n";
 import * as library from "../../../server/src/library";
 import * as sync from "../../../server/src/sync";
+import * as remote from "../../../server/src/connect";
 import { findVideoFor, radio, search, suggestions } from "../../../server/src/search";
 import { HttpError, VIDEO_ID } from "../../../server/src/types";
 import { getLang, getT } from "../i18n";
 import { ApiError, type MusikeApi, type SystemInfo } from "../lib/apiTypes";
 import type { DownloadsInfo } from "../lib/types";
 import "./android";
+import { lanFetch } from "./connect";
 import { androidDownloads, downloadsAvailable, downloadsReady, fileUrl } from "./downloads";
 import { media } from "./media";
 import { nativeStorage, nativeStore } from "./storage";
@@ -42,6 +44,23 @@ if (downloadsAvailable) {
 sync.useSync({ storage: nativeStore, fetch: (...args) => globalThis.fetch(...args), api: config.githubApi });
 sync.startAutoSync();
 addEventListener("online", () => void sync.syncNow());
+
+// Remote playback, while this phone is linked: the relay through the web view's fetch (it streams), the desktop app on
+// the same Wi-Fi through Android's HTTP.
+const startRemote = async (token: string | null) => {
+  if (!token) return remote.stopConnect();
+  await remote.startConnect({
+    token,
+    store: nativeStore,
+    name: document.documentElement.dataset.tv === "1" ? "Android TV" : "Android phone",
+    kind: "android",
+    relayUrl: "https://ntfy.sh",
+    fetch: (...args) => globalThis.fetch(...args),
+    lanFetch,
+  });
+};
+sync.onSyncLink((token) => void startRemote(token).catch(() => {}));
+void sync.syncToken().then(startRemote).catch(() => {});
 
 const NO_DOWNLOADS: DownloadsInfo = { items: [], jobs: [], bytes: 0, offline: { favorites: false, playlists: [] } };
 
@@ -138,6 +157,10 @@ export const api: MusikeApi = {
   download: (list) => call(() => downloads.enqueue(list, getLang())),
   removeDownloads: (ids) => call(() => downloads.removeDownloads(ids, getLang())),
   setOffline: (change) => call(() => downloads.setOffline(change, getLang())),
+
+  connectWait: (since) => remote.waitConnect(since),
+  connectState: (state) => remote.setLocalState(state ? { ...state, track: library.sanitizeTrack(state.track) } : null),
+  connectCommand: (to, action, position) => remote.sendCommand(to, action, position),
 
   syncStatus: () => call(() => sync.syncStatus(getLang())),
   syncConnect: (token) =>

@@ -29,6 +29,10 @@ export const config = {
   location: process.env.MUSIKE_LOCATION ?? "BR",
   /** GitHub's API, for sync. Tests point it elsewhere. */
   githubApi: process.env.MUSIKE_GITHUB_API ?? "https://api.github.com",
+  /** The public relay remote playback uses between devices on different networks. */
+  relayUrl: process.env.MUSIKE_RELAY_URL ?? "https://ntfy.sh",
+  /** This device's name for remote playback (the desktop app passes the computer's name). */
+  deviceName: process.env.MUSIKE_DEVICE_NAME ?? "",
   /** HTTP for youtubei.js; the platform's own fetch here (the Android app passes its native one). */
   fetch: undefined as typeof fetch | undefined,
 };

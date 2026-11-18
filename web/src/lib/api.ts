@@ -10,6 +10,7 @@ import {
   type SystemJob,
   type SystemMedia,
   type SyncStatus,
+  type ConnectSnapshot,
 } from "./apiTypes";
 import type { AlbumCard, AlbumPage, ArtistPage, DownloadsInfo, Genre, GenreArtist, GenrePage, Library, Playlist, Track } from "./types";
 
@@ -83,6 +84,11 @@ export const api: MusikeApi = {
   removeDownloads: (ids: string[] | null) =>
     request<DownloadsInfo>("/api/downloads/remove", { method: "POST", json: ids ? { ids } : {} }),
   setOffline: (change) => request<DownloadsInfo>("/api/downloads/offline", { method: "POST", json: change }),
+
+  connectWait: (since) => request<ConnectSnapshot>(`/api/connect?since=${since}`),
+  connectState: (state) => request<void>("/api/connect/state", { method: "POST", json: { state } }).then(() => {}),
+  connectCommand: (to, action, position) =>
+    request<{ answered: boolean }>("/api/connect/command", { method: "POST", json: { to, action, position } }).then((r) => r.answered),
 
   syncStatus: () => request<SyncStatus>("/api/sync"),
   syncConnect: (token: string) => request<SyncStatus>("/api/sync", { method: "POST", json: { token } }),

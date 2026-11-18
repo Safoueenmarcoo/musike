@@ -469,7 +469,7 @@ export const pt: Messages = {
 
   sync: {
     title: "Sincronizar entre dispositivos",
-    body: "Suas playlists, favoritas, histórico e downloads ficam iguais no computador e no celular. Eles se encontram num gist secreto no seu GitHub.",
+    body: "Suas playlists, favoritas, histórico e downloads ficam iguais no computador e no celular, e cada um mostra e controla o que o outro toca. Eles se encontram num gist secreto no seu GitHub.",
     step1: "No GitHub,",
     step1Link: "crie um token com acesso a Gists",
     step2: "Copie e cole aqui.",
@@ -488,6 +488,20 @@ export const pt: Messages = {
     unlink: "Desconectar",
     unlinkConfirm: "Desconectar agora",
     unlinkBody: "Este dispositivo para de sincronizar e mantém a biblioteca como está. Os outros dispositivos e o gist não mudam.",
+  },
+
+  remote: {
+    playingOn: (name) => `Tocando em ${name}`,
+    pausedOn: (name) => `Pausado em ${name}`,
+    playHere: "Tocar aqui",
+    controls: (name) => `Controles de ${name}`,
+    notAnswering: (name) => `${name} não responde. O Musike está aberto lá?`,
+    devices: "Dispositivos online",
+    thisDevice: (name) => `Este dispositivo: ${name}`,
+    none: "Nenhum outro dispositivo agora. Abra o Musike em outro dispositivo conectado e ele aparece aqui.",
+    viaWifi: "mesmo Wi-Fi",
+    viaInternet: "pela internet",
+    limited: "O limite diário do relay gratuito acabou: dispositivos em outras redes voltam a aparecer amanhã. No mesmo Wi-Fi tudo continua funcionando.",
   },
 
   toasts: {

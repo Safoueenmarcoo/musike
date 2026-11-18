@@ -1,8 +1,39 @@
-import { ArrowsClockwiseIcon, ArrowSquareOutIcon, CloudCheckIcon, CloudSlashIcon, GithubLogoIcon } from "@phosphor-icons/react";
+import { ArrowsClockwiseIcon, ArrowSquareOutIcon, CloudCheckIcon, CloudSlashIcon, DesktopIcon, DeviceMobileIcon, GithubLogoIcon } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 import { useT } from "../i18n";
 import { cn } from "../lib/format";
+import { useRemote } from "../stores/remote";
 import { useSync } from "../stores/sync";
+
+/** The other linked devices remote playback can see right now, and how. */
+function Devices() {
+  const snap = useRemote((s) => s.snap);
+  const t = useT();
+  if (!snap?.enabled || !snap.self) return null;
+  return (
+    <div className="flex flex-col gap-2 border-t border-line pt-3">
+      <p className="text-xs font-medium text-fg-3">{t.remote.devices}</p>
+      <p className="text-xs text-fg-2">{t.remote.thisDevice(snap.self.name)}</p>
+      {snap.peers.length ? (
+        <ul className="flex flex-col gap-1.5">
+          {snap.peers.map((p) => {
+            const Icon = p.kind === "android" ? DeviceMobileIcon : DesktopIcon;
+            return (
+              <li key={p.id} className="flex items-center gap-2 text-sm">
+                <Icon size={17} className="shrink-0 text-fg-2" />
+                <span className="min-w-0 flex-1 truncate">{p.name}</span>
+                <span className="shrink-0 text-xs text-fg-3">{p.via === "lan" ? t.remote.viaWifi : t.remote.viaInternet}</span>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p className="text-xs text-fg-3">{t.remote.none}</p>
+      )}
+      {snap.relay === "limited" && <p className="text-xs text-danger">{t.remote.limited}</p>}
+    </div>
+  );
+}
 
 /** A GitHub page that creates a classic token with only the "gist" permission, already named. */
 const NEW_TOKEN = "https://github.com/settings/tokens/new?scopes=gist&description=Musike%20sync";
@@ -67,6 +98,7 @@ export function SyncSection() {
             </button>
           </div>
           {confirming && <p className="text-sm text-fg-2">{t.sync.unlinkBody}</p>}
+          <Devices />
         </div>
       ) : (
         <form

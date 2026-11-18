@@ -56,6 +56,18 @@ let applying = false;
 let changeTimer: ReturnType<typeof setTimeout> | undefined;
 let ticker: ReturnType<typeof setInterval> | undefined;
 let unsubscribe: (() => void) | null = null;
+const linkListeners = new Set<(token: string | null) => void>();
+
+/** Told when this device is linked or unlinked (remote playback uses the same token). */
+export function onSyncLink(fn: (token: string | null) => void): () => void {
+  linkListeners.add(fn);
+  return () => linkListeners.delete(fn);
+}
+
+/** The token this device is linked with, if any. */
+export async function syncToken(): Promise<string | null> {
+  return (await readConfig())?.token ?? null;
+}
 
 export function useSync(options: { storage: SyncStorage; fetch?: typeof fetch; api?: string }) {
   storage = options.storage;
@@ -227,6 +239,7 @@ export async function connect(token: unknown): Promise<void> {
   await storage!.remove(BASE).catch(() => {});
   config = c;
   lastError = null;
+  linkListeners.forEach((fn) => fn(c.token));
   await syncNow();
 }
 
@@ -237,6 +250,7 @@ export async function disconnect(): Promise<void> {
   config = null;
   lastSync = null;
   lastError = null;
+  linkListeners.forEach((fn) => fn(null));
 }
 
 export async function syncStatus(lang: Lang): Promise<SyncStatus> {

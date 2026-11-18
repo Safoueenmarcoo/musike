@@ -4,6 +4,7 @@ import { AddToPlaylistDialog, ShortcutsDialog } from "./components/Dialogs";
 import { MiniPlayer, TabBar } from "./components/MobileChrome";
 import { NowPlayingSheet, PanelDrawer, SidePanel } from "./components/NowPlaying";
 import { OfflineNotice } from "./components/OfflineNotice";
+import { RemoteBar } from "./components/RemoteBar";
 import { PlayerBar } from "./components/PlayerBar";
 import { Rail } from "./components/Rail";
 import { TitleBar } from "./components/TitleBar";
@@ -22,6 +23,7 @@ import { usePlayer } from "./player/player";
 import { useDownloads } from "./stores/downloads";
 import { useLibrary } from "./stores/library";
 import { useSync } from "./stores/sync";
+import { useRemotePeer } from "./stores/remote";
 import { openSettings, useSystem } from "./stores/system";
 import { toast, useUi } from "./stores/ui";
 import Album from "./views/Album";
@@ -44,6 +46,7 @@ export default function App() {
   const isMd = useMediaQuery(MD);
   const panelOpen = useUi((s) => s.panelOpen);
   const hasTrack = usePlayer((s) => s.queue.length > 0);
+  const remote = !!useRemotePeer();
   const loadLibrary = useLibrary((s) => s.load);
   const loadDownloads = useDownloads((s) => s.load);
   const loadSync = useSync((s) => s.load);
@@ -122,7 +125,14 @@ export default function App() {
           ref={main}
           className={cn(
             "scroll-area relative min-w-0 flex-1 overflow-y-auto md:rounded-[20px] md:bg-surface-1 md:ring-1 md:ring-line",
-            hasTrack ? "pb-[calc(152px+env(safe-area-inset-bottom))]" : "pb-[calc(88px+env(safe-area-inset-bottom))]",
+            // Room for the phone's bottom bars: tabs, the mini player, the "Playing on…" bar.
+            hasTrack
+              ? remote
+                ? "pb-[calc(222px+env(safe-area-inset-bottom))]"
+                : "pb-[calc(152px+env(safe-area-inset-bottom))]"
+              : remote
+                ? "pb-[calc(158px+env(safe-area-inset-bottom))]"
+                : "pb-[calc(88px+env(safe-area-inset-bottom))]",
             "md:pb-0",
           )}
         >
@@ -150,9 +160,13 @@ export default function App() {
       </div>
 
       {isMd ? (
-        <PlayerBar />
+        <>
+          <RemoteBar above={false} />
+          <PlayerBar />
+        </>
       ) : (
         <>
+          <RemoteBar above={hasTrack} />
           <MiniPlayer />
           <TabBar />
         </>

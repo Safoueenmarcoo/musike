@@ -61,6 +61,31 @@ export interface SyncStatus {
   revision: number;
 }
 
+/** Remote playback between devices (server/src/connect.ts). */
+export type RemoteAction = "play" | "pause" | "next" | "previous" | "seek";
+export interface RemoteState {
+  track: Track;
+  status: "playing" | "paused";
+  position: number;
+  duration: number;
+}
+export interface RemotePeer {
+  id: string;
+  name: string;
+  kind: "desktop" | "android" | "web";
+  via: "lan" | "relay";
+  state: (RemoteState & { receivedAt: number }) | null;
+  lastSeen: number;
+}
+export interface ConnectSnapshot {
+  enabled: boolean;
+  self: { id: string; name: string; kind: RemotePeer["kind"] } | null;
+  peers: RemotePeer[];
+  commands: { seq: number; from: string; action: RemoteAction; position?: number }[];
+  seq: number;
+  relay: "off" | "connecting" | "ok" | "down" | "limited";
+}
+
 /** Keeps a whole collection downloaded, or stops. */
 export type OfflineCollection = { favorites: boolean } | { playlist: { id: string; on: boolean } };
 
@@ -115,6 +140,13 @@ export interface MusikeApi {
   removeDownloads(ids: string[] | null): Promise<DownloadsInfo>;
   /** Keeps a playlist or the favorites downloaded (songs added later too), or stops. */
   setOffline(change: OfflineCollection): Promise<DownloadsInfo>;
+
+  /** Long poll: the devices around and the commands for this one, once something newer than `since` happens. */
+  connectWait(since: number): Promise<ConnectSnapshot>;
+  /** This device's playback, sent when it changes. */
+  connectState(state: RemoteState | null): Promise<void>;
+  /** Asks another device to play, pause, skip or seek; false when it isn't answering. */
+  connectCommand(to: string, action: RemoteAction, position?: number): Promise<boolean>;
 
   syncStatus(): Promise<SyncStatus>;
   /** Links this device to GitHub with a token and syncs. */

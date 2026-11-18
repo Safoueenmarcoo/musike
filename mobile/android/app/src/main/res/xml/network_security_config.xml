@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Remote playback talks to the Musike desktop app on the same Wi-Fi over plain http (a local address has no
+  certificate). What travels there is encrypted by the app itself (AES-GCM with the devices' shared key), and
+  everything else the app fetches (YouTube, GitHub, the relay) is https.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>
