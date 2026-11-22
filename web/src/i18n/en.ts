@@ -510,6 +510,24 @@ export const en = {
     limited: "The free relay's daily limit is used up: devices on other networks show up again tomorrow. On the same Wi-Fi everything still works.",
   },
 
+  updates: {
+    title: "Updates",
+    version: (v: string) => `Musike ${v}`,
+    check: "Check for updates",
+    checking: "Checking GitHub…",
+    current: "This is the latest version.",
+    available: (v: string) => `Musike ${v} is out`,
+    update: "Update",
+    updateTo: (v: string) => `Update to ${v}`,
+    downloading: (pct: number) => `Downloading… ${pct}%`,
+    installingWindows: "Installing. Musike closes and opens again in a moment.",
+    installingAndroid: "Android's installer is open: tap Install. If you closed it, tap Update again.",
+    permission: "Musike+ needs your OK to install apps. Allow it in the screen Android opens, come back, and tap Update again.",
+    failed: "The update didn't go through",
+    githubError: (status: number) => `GitHub answered ${status}. Try again in a while.`,
+    notes: "What's new",
+  },
+
   toasts: {
     dismiss: (message: string) => `${message}. Close notice`,
     addedFavorite: "Added to Favorites",

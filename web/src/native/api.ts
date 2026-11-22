@@ -29,6 +29,8 @@ import { nativeStorage, nativeStore } from "./storage";
 import { config } from "./shims/config";
 import { forgetUrl, resolveAudio } from "./streams";
 
+export { updater } from "./update";
+
 // The Android backend: the Musike server's own code (search, genres, artists, albums, library), running on the
 // phone instead of behind HTTP. The build swaps lib/api.ts for this module (see vite.config.ts).
 export * from "../lib/apiTypes";

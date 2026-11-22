@@ -504,6 +504,24 @@ export const pt: Messages = {
     limited: "O limite diário do relay gratuito acabou: dispositivos em outras redes voltam a aparecer amanhã. No mesmo Wi-Fi tudo continua funcionando.",
   },
 
+  updates: {
+    title: "Atualizações",
+    version: (v) => `Musike ${v}`,
+    check: "Procurar atualizações",
+    checking: "Consultando o GitHub…",
+    current: "Esta é a versão mais recente.",
+    available: (v) => `Saiu o Musike ${v}`,
+    update: "Atualizar",
+    updateTo: (v) => `Atualizar para ${v}`,
+    downloading: (pct) => `Baixando… ${pct}%`,
+    installingWindows: "Instalando. O Musike fecha e abre de novo em instantes.",
+    installingAndroid: "O instalador do Android está aberto: toque em Instalar. Se você fechou, toque em Atualizar de novo.",
+    permission: "O Musike+ precisa da sua permissão para instalar apps. Permita na tela que o Android abre, volte e toque em Atualizar de novo.",
+    failed: "A atualização não deu certo",
+    githubError: (status) => `O GitHub respondeu ${status}. Tente de novo daqui a pouco.`,
+    notes: "Novidades",
+  },
+
   toasts: {
     dismiss: (message) => `${message}. Fechar aviso`,
     addedFavorite: "Adicionada às Favoritas",

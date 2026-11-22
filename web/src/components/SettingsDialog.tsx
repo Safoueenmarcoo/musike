@@ -17,6 +17,7 @@ import { BackupSection } from "./BackupSection";
 import { AccentPicker, LayoutSection } from "./CustomizeSection";
 import { DownloadsSection } from "./DownloadsSection";
 import { SyncSection } from "./SyncSection";
+import { UpdateSection } from "./UpdateSection";
 import { Modal } from "./Modal";
 
 function Segmented<T extends string>({
@@ -155,6 +156,8 @@ export function SettingsDialog() {
         </section>
 
         <LayoutSection />
+
+        <UpdateSection />
 
         <SyncSection />
 

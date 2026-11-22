@@ -157,3 +157,20 @@ export interface MusikeApi {
   system(): Promise<SystemInfo>;
   updateYtdlp(channel: Channel): Promise<SystemJob>;
 }
+
+/** A release file this device can update itself with. */
+export interface UpdateFile {
+  url: string;
+  version: string;
+  size: number;
+  sha256?: string;
+}
+
+/** Updating from the app, where the platform allows it (the Windows app and the Android app). */
+export interface Updater {
+  platform: "windows" | "android";
+  /** How this platform's file is named in a release. */
+  file: RegExp;
+  /** Downloads and starts the install. "permission": Android wasn't allowed to install apps from Musike+. */
+  install(file: UpdateFile, progress: (fraction: number) => void): Promise<"started" | "permission">;
+}

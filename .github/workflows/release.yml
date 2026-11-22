@@ -1,10 +1,11 @@
-# Builds the downloads and attaches them to a draft GitHub release. Two ways to start it:
+# Builds the downloads and publishes them as a GitHub release. Two ways to start it:
 #   - push a release tag (v1.6.0), or
 #   - Actions → Release → Run workflow, giving the tag to release as (it is created for you). Leave the tag
 #     empty to only build: the files are then kept with the run, as artifacts.
 # This fork ships two downloads: the Windows installer and the Android APK. The macOS apps, the Linux packages
 # and the unsigned iOS app are still here, and build when a manual run names them ("windows android mac linux ios").
-# The draft only goes public when it's published by hand, after checking it.
+# The release is published straight away: the apps look at the latest release and offer it as an update.
+# To check the files first, run it by hand with "draft" ticked, then publish the draft on GitHub when ready.
 #
 # The APK is signed with the key in these repository secrets (Settings → Secrets and variables → Actions):
 #   MUSIKE_KEYSTORE_BASE64    the .jks file, base64-encoded
@@ -21,8 +22,12 @@ on:
         description: "Systems to build, separated by spaces: windows android mac linux ios"
         default: "windows android"
       release:
-        description: "Tag for a draft release with the files, e.g. v1.6.0 (empty: build only)"
+        description: "Tag for the release with the files, e.g. v1.6.0 (empty: build only)"
         default: ""
+      draft:
+        description: "Keep the release as a draft (the apps don't see it until it's published)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -200,9 +205,12 @@ jobs:
       - uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ inputs.release || github.ref_name }}
-          draft: true
+          draft: ${{ inputs.draft == true }}
+          make_latest: true
           body: |
-            Musike with offline downloads.
+            Musike with offline downloads, sync and remote playback.
+
+            From 1.9.0 on, the apps offer new versions themselves (**Settings > Updates**). For a first install, or from an older version:
 
             - **Windows:** run the `-Windows.exe` file. It installs over an older Musike and keeps the library and the downloaded songs.
             - **Android:** open the `-Android.apk` file on the phone. It installs as "Musike+", next to the original app; later versions of this build install over it.

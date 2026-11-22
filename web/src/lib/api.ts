@@ -11,7 +11,9 @@ import {
   type SystemMedia,
   type SyncStatus,
   type ConnectSnapshot,
+  type Updater,
 } from "./apiTypes";
+import { desktop } from "./desktop";
 import type { AlbumCard, AlbumPage, ArtistPage, DownloadsInfo, Genre, GenreArtist, GenrePage, Library, Playlist, Track } from "./types";
 
 // The HTTP backend: the Musike server (web app, desktop app). The Android build swaps this module for native/api.ts.
@@ -118,6 +120,24 @@ export async function saveFile(name: string, text: string) {
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
+
+/** The Windows app updates itself from GitHub; a browser on a Musike server is updated where the server runs. */
+export const updater: Updater | null =
+  desktop?.platform === "win32" && desktop.installUpdate
+    ? {
+        platform: "windows",
+        file: /-Windows\.exe$/,
+        async install(file, progress) {
+          const stop = desktop!.onUpdateProgress?.(progress);
+          try {
+            await desktop!.installUpdate!(file);
+            return "started";
+          } finally {
+            stop?.();
+          }
+        },
+      }
+    : null;
 
 /** Only the Android app needs its own bridge to the system's media controls. */
 export const systemMedia: SystemMedia | null = null;

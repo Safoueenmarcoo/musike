@@ -1,9 +1,10 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { app, BrowserWindow, ipcMain, Menu, screen, shell } from "electron";
+import { app, BrowserWindow, ipcMain, Menu, net, screen, shell } from "electron";
 import type { RunningServer } from "../../server/src/app.js";
 import { backupLibraryOnUpdate } from "./backup.js";
+import { downloadUpdate, runInstaller, validRequest } from "./update.js";
 
 // No top-level await in this file: Electron only fires "ready" after the entry module finishes
 // evaluating, so awaiting it at the top level would hang forever.
@@ -207,6 +208,27 @@ ipcMain.on("musike:retry", (event) => {
   // Open the new splash before closing the old one, or "window-all-closed" would quit the app.
   void launch();
   failed?.destroy();
+});
+
+// Updates from the app (Windows only: the installer can replace the app in place). The page found the release.
+let updating = false;
+ipcMain.handle("musike:update", async (event, request: unknown) => {
+  if (process.platform !== "win32") throw new Error("Updates from the app are only for Windows");
+  if (!event.senderFrame?.url.startsWith("http://127.0.0.1:")) throw new Error("Not from Musike's window");
+  if (!validRequest(request)) throw new Error("Invalid update");
+  if (updating) throw new Error("Already updating");
+  updating = true;
+  try {
+    const file = await downloadUpdate(request, path.join(app.getPath("temp"), "musike-update"), (url) => net.fetch(url), (fraction) => {
+      if (!event.sender.isDestroyed()) event.sender.send("musike:update-progress", fraction);
+    });
+    runInstaller(file);
+    // Close so the installer can replace the files; it opens the new version itself.
+    setTimeout(() => app.quit(), 500);
+  } catch (err) {
+    updating = false;
+    throw err;
+  }
 });
 
 app.on("second-instance", () => {

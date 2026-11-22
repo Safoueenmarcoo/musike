@@ -33,6 +33,7 @@ Runs as a **Windows**, **macOS** and **Linux** app, as an **Android**, **Android
 - [Offline downloads](#offline-downloads)
 - [Sync between devices](#sync-between-devices)
 - [Control playback from another device](#control-playback-from-another-device)
+- [Updates](#updates)
 - [Screenshots](#screenshots)
 - [How it works](#how-it-works)
 - [Installation](#installation)
@@ -125,7 +126,7 @@ Where the songs are kept:
 
 Each song is the audio stream the player would get, saved as `<video id>.m4a` (AAC) or `.webm` (Opus), with its cover as `<video id>.jpg` and `index.json` listing what is there. In a browser pointed at a Musike server, downloads live on the server, not on the device holding the browser. The iPhone app doesn't download yet.
 
-**Building this fork.** Pushing a tag such as `v1.6.0` runs the Release workflow, which attaches the Windows installer and the Android APK to a draft release. The APK is signed with the key in the repository secrets named at the top of [release.yml](.github/workflows/release.yml): always the same one, or a later APK can't install over the one on the phone. The Android app has its own id (`app.musike.plus`) and name (Musike+), so it installs next to the original app instead of clashing with it; move a library between the two with [backup to a file](#moving-your-library-backup).
+**Building this fork.** Pushing a tag such as `v1.6.0` runs the Release workflow, which publishes a release with the Windows installer and the Android APK; the apps then offer it as an update ([Updates](#updates)). The APK is signed with the key in the repository secrets named at the top of [release.yml](.github/workflows/release.yml): always the same one, or a later APK can't install over the one on the phone. The Android app has its own id (`app.musike.plus`) and name (Musike+), so it installs next to the original app instead of clashing with it; move a library between the two with [backup to a file](#moving-your-library-backup).
 
 ## Sync between devices
 
@@ -147,6 +148,15 @@ The devices find each other two ways:
 - **Over the internet.** Otherwise messages go through [ntfy.sh](https://ntfy.sh), a free public relay, on a topic named after a hash of the token and sealed with a key also made from the token, so the relay can't read them. ntfy.sh allows about 250 messages a day from one connection; past that, remote control pauses until the next day and the device list says so. Set `MUSIKE_RELAY_URL` to use your own ntfy server.
 
 A device can only be controlled while Musike is open on it. On Android, a phone with the app in the background may stop answering after a while; open it again and it reappears. Play here moves the song, not the queue.
+
+## Updates
+
+From 1.9.0 on, the Windows app and the Android app look at this fork's [latest release](https://github.com/Safoueenmarcoo/musike/releases/latest) a few seconds after they open and every six hours, and say so when there's a newer version. **Settings > Updates** shows the version and has a button to check by hand.
+
+- **Windows:** **Update** downloads the installer, checks it against the size and SHA-256 GitHub lists for it, and installs it over the app silently. Musike closes and opens again on the new version, with the library and downloads as they were.
+- **Android:** **Update** downloads the APK and opens Android's installer, where you tap **Install**. The first time, Android asks to let Musike+ install apps: allow it and come back, and the update carries on.
+
+To publish an update, bump the version and run the Release workflow with the new tag (or push the tag). Drafts and pre-releases aren't offered. Versions up to 1.8.0 don't have this, so 1.9.0 has to be installed by hand once.
 
 ## Screenshots
 

@@ -23,6 +23,7 @@ import { usePlayer } from "./player/player";
 import { useDownloads } from "./stores/downloads";
 import { useLibrary } from "./stores/library";
 import { useSync } from "./stores/sync";
+import { startUpdateChecks } from "./stores/updates";
 import { useRemotePeer } from "./stores/remote";
 import { openSettings, useSystem } from "./stores/system";
 import { toast, useUi } from "./stores/ui";
@@ -59,6 +60,7 @@ export default function App() {
     void loadLibrary();
     void loadDownloads();
     void loadSync();
+    startUpdateChecks();
   }, [loadLibrary, loadDownloads, loadSync]);
 
   // Check yt-dlp shortly after start and say so once if something needs doing (not on Android: no yt-dlp there).
