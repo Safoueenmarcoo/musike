@@ -4,6 +4,7 @@ import { msg, tr } from "../../../server/src/i18n";
 import { getLang } from "../i18n";
 import { ApiError } from "../lib/apiTypes";
 import { config } from "./shims/config";
+import { unproxied } from "./streamUrl";
 import { nativeResolverAvailable, resolveNatively } from "./ytplayer";
 
 /**
@@ -92,5 +93,6 @@ export function resolveAudio(id: string): Promise<DirectAudio> {
 
 /** Forgets the stream behind a URL that stopped working, so the next try resolves a fresh one. */
 export function forgetUrl(url: string) {
-  for (const [id, r] of cache) if (r.url === url) cache.delete(id);
+  const real = unproxied(url, location.href);
+  for (const [id, r] of cache) if (r.url === real || r.low?.url === real) cache.delete(id);
 }

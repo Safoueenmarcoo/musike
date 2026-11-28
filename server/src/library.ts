@@ -67,8 +67,12 @@ export function sanitizeTrack(input: unknown): Track {
     thumb: url(t.thumb),
     art: url(t.art),
     kind: t.kind === "video" ? "video" : "song",
+    ...(typeof t.addedAt === "number" && Number.isFinite(t.addedAt) && t.addedAt > 0 ? { addedAt: Math.round(t.addedAt) } : {}),
   };
 }
+
+/** The same track, marked as added now. */
+const stamped = (track: Track, at = Date.now()): Track => ({ ...track, addedAt: at });
 
 function findPlaylist(lib: Library, pid: string): Playlist {
   const p = lib.playlists.find((x) => x.id === pid);
@@ -82,7 +86,7 @@ export async function getLibrary(): Promise<Library> {
 
 export async function addFavorite(track: Track): Promise<Track[]> {
   const lib = await load();
-  lib.favorites = [track, ...lib.favorites.filter((t) => t.id !== track.id)];
+  lib.favorites = [stamped(track), ...lib.favorites.filter((t) => t.id !== track.id)];
   await persist();
   return lib.favorites;
 }
@@ -91,7 +95,8 @@ export async function addFavorite(track: Track): Promise<Track[]> {
 export async function addFavorites(tracks: Track[]): Promise<Track[]> {
   const lib = await load();
   const seen = new Set(lib.favorites.map((t) => t.id));
-  const added = tracks.filter((t) => !seen.has(t.id) && !!seen.add(t.id));
+  const now = Date.now();
+  const added = tracks.filter((t) => !seen.has(t.id) && !!seen.add(t.id)).map((t) => stamped(t, now));
   lib.favorites = [...added, ...lib.favorites];
   await persist();
   return lib.favorites;
@@ -116,7 +121,7 @@ export async function createPlaylist(name: string, tracks: Track[] = []): Promis
   const clean = name.trim().slice(0, 80);
   if (!clean) throw new HttpError(400, msg("playlistNameRequired"));
   const now = Date.now();
-  const playlist: Playlist = { id: randomUUID(), name: clean, createdAt: now, updatedAt: now, tracks };
+  const playlist: Playlist = { id: randomUUID(), name: clean, createdAt: now, updatedAt: now, tracks: tracks.map((t) => stamped(t, now)) };
   lib.playlists.unshift(playlist);
   await persist();
   return playlist;
@@ -144,9 +149,32 @@ export async function deletePlaylist(pid: string): Promise<void> {
 export async function addToPlaylist(pid: string, tracks: Track | Track[]): Promise<Playlist> {
   const lib = await load();
   const p = findPlaylist(lib, pid);
+  const now = Date.now();
   for (const track of Array.isArray(tracks) ? tracks : [tracks]) {
-    if (!p.tracks.some((t) => t.id === track.id)) p.tracks.push(track);
+    if (!p.tracks.some((t) => t.id === track.id)) p.tracks.push(stamped(track, now));
   }
+  p.updatedAt = Date.now();
+  await persist();
+  return p;
+}
+
+/**
+ * Puts a playlist's songs in the order of `ids`. Songs `ids` doesn't name keep their place after the ones it does (a
+ * song added meanwhile on another device isn't lost); ids that aren't in the playlist are ignored.
+ */
+export async function reorderPlaylist(pid: string, ids: string[]): Promise<Playlist> {
+  const lib = await load();
+  const p = findPlaylist(lib, pid);
+  const byId = new Map(p.tracks.map((t) => [t.id, t]));
+  const ordered: Track[] = [];
+  for (const id of ids) {
+    const t = byId.get(id);
+    if (t) {
+      ordered.push(t);
+      byId.delete(id);
+    }
+  }
+  p.tracks = [...ordered, ...p.tracks.filter((t) => byId.has(t.id))];
   p.updatedAt = Date.now();
   await persist();
   return p;

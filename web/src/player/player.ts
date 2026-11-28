@@ -3,10 +3,12 @@ import { isOnline } from "../hooks/useOnline";
 import { getT, useT } from "../i18n";
 import { api, capabilities, explainStreamError, streamSource, systemMedia, type ApiError, type ErrorCode } from "../lib/api";
 import { createAudio } from "../lib/audio";
+import { equalizerSupported, isRouted, route, setGains, wake } from "../lib/equalizer";
 import { shuffled } from "../lib/format";
 import type { Track } from "../lib/types";
 import { isDownloaded, useDownloads } from "../stores/downloads";
 import { useLibrary } from "../stores/library";
+import { usePlayback } from "../stores/playback";
 import { openSettings } from "../stores/system";
 import { toast } from "../stores/ui";
 
@@ -47,6 +49,10 @@ interface PlayerState {
   playNext: (track: Track) => void;
   addToQueue: (track: Track) => void;
   removeAt: (i: number) => void;
+  /** Moves a song that's coming up (after the current one) elsewhere among the songs coming up. */
+  moveInQueue: (from: number, to: number) => void;
+  /** Loads the current song again where it is (after its stream has to come from somewhere else). */
+  reload: () => void;
   jumpTo: (i: number) => void;
   clearUpcoming: () => void;
   startRadio: (track: Track) => Promise<void>;
@@ -174,6 +180,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
   const activeMedia = (): HTMLMediaElement | null => (loaded ? mediaFor(loaded.kind) : null);
 
   function play(media: HTMLMediaElement) {
+    if (isRouted(media)) wake();
     media.play().catch((err: DOMException) => {
       if (err.name === "AbortError") return; // src changed mid-start
       if (err.name === "NotAllowedError") set({ status: "paused" }); // autoplay blocked
@@ -233,6 +240,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
     media.muted = s.muted;
     const start = (src: string) => {
       media.src = src;
+      media.playbackRate = usePlayback.getState().speed;
       if (autoplay) play(media);
     };
     // The server's proxy URL is known right away; on Android the stream is first resolved on the phone.
@@ -483,6 +491,21 @@ export const usePlayer = create<PlayerState>((set, get) => {
       }
     },
 
+    moveInQueue: (from, to) => {
+      const s = get();
+      if (from === to || from <= s.index || to <= s.index || from >= s.queue.length || to >= s.queue.length) return;
+      const queue = s.queue.slice();
+      const [moved] = queue.splice(from, 1);
+      queue.splice(to, 0, moved!);
+      set({ queue });
+    },
+
+    reload: () => {
+      const s = get();
+      if (!loaded || !s.queue[s.index]) return;
+      load(s.index, { startAt: s.position, autoplay: s.status === "playing" || s.status === "loading" });
+    },
+
     jumpTo: (i) => load(i),
 
     clearUpcoming: () => {
@@ -599,7 +622,34 @@ export const usePlayer = create<PlayerState>((set, get) => {
 audio.volume = videoEl.volume = usePlayer.getState().volume;
 audio.muted = videoEl.muted = usePlayer.getState().muted;
 
+// Speed and equalizer (stores/playback.ts) apply to whatever is playing, at once.
+function applyPlayback() {
+  const { speed, eqOn, gains } = usePlayback.getState();
+  for (const media of [audio, videoEl]) {
+    media.defaultPlaybackRate = speed;
+    media.playbackRate = speed;
+  }
+  if (eqOn && equalizerSupported(audio)) {
+    const fresh = !isRouted(audio);
+    route(audio);
+    if (capabilities.video) route(videoEl);
+    // A stream from elsewhere (the phone plays YouTube's directly) would go silent once routed: load it again,
+    // now through the app's own proxy (native/api.ts streamSource).
+    const src = audio.currentSrc || audio.src;
+    if (fresh && src && !src.startsWith(location.origin) && !src.startsWith("/")) usePlayer.getState().reload();
+  }
+  setGains(gains, eqOn);
+}
+applyPlayback();
+usePlayback.subscribe((s, prev) => {
+  if (s.speed !== prev.speed || s.eqOn !== prev.eqOn || s.gains !== prev.gains) applyPlayback();
+  if (s.speed !== prev.speed) syncPositionState();
+});
+
 export const selectCurrent = (s: PlayerState): Track | null => s.queue[s.index] ?? null;
+
+/** Whether this platform's player can go through the equalizer (not the iPhone's native player). */
+export const canEqualize = equalizerSupported(audio);
 
 /** Whether the track can be shown as video (art tracks are audio with a still image). */
 
@@ -673,7 +723,7 @@ function syncPositionState() {
   if (!("mediaSession" in navigator) || !navigator.mediaSession.setPositionState) return;
   if (!Number.isFinite(duration) || duration <= 0) return;
   try {
-    navigator.mediaSession.setPositionState({ duration, position: Math.min(position, duration), playbackRate: 1 });
+    navigator.mediaSession.setPositionState({ duration, position: Math.min(position, duration), playbackRate: usePlayback.getState().speed });
   } catch {
     /* some browsers reject transient states */
   }

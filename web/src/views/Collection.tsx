@@ -1,5 +1,5 @@
-import { DotsThreeIcon, MagnifyingGlassIcon, PauseIcon, PencilSimpleIcon, PlayIcon, ShuffleIcon, TrashIcon } from "@phosphor-icons/react";
-import { useState } from "react";
+import { DotsThreeIcon, MagnifyingGlassIcon, PauseIcon, PencilSimpleIcon, PlayIcon, ShuffleIcon, SortAscendingIcon, TrashIcon, XCircleIcon } from "@phosphor-icons/react";
+import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { Cover, type CoverKind } from "../components/Cover";
 import { NamePlaylistDialog } from "../components/Dialogs";
@@ -9,6 +9,7 @@ import { Modal } from "../components/Modal";
 import { EmptyState, PageHeader } from "../components/Page";
 import { TrackList } from "../components/TrackList";
 import { useT } from "../i18n";
+import { arrange, savedSort, saveSort, SORTS, type SortKey } from "../lib/arrange";
 import { shuffled } from "../lib/format";
 import { paths } from "../lib/routes";
 import type { Track } from "../lib/types";
@@ -31,11 +32,29 @@ export default function Collection({ kind }: Props) {
   const [renaming, setRenaming] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const sortId = kind === "playlist" ? (id ?? "") : kind;
+  const [sort, setSortState] = useState<SortKey>(() => savedSort(kind, sortId));
+  const [sortFor, setSortFor] = useState(sortId);
+  // Another playlist opened in the same view: its own sort, and no leftover search.
+  if (sortFor !== sortId) {
+    setSortFor(sortId);
+    setSortState(savedSort(kind, sortId));
+    setQuery("");
+  }
+  const setSort = (next: SortKey) => {
+    setSortState(next);
+    saveSort(sortId, next);
+  };
   const t = useT();
 
   const playlist = kind === "playlist" ? lib.playlists.find((p) => p.id === id) : undefined;
   const tracks: Track[] = kind === "favorites" ? lib.favorites : kind === "history" ? lib.history : playlist?.tracks ?? [];
   const name = kind === "favorites" ? t.nav.favorites : kind === "history" ? t.nav.recentlyPlayed : playlist?.name ?? "";
+  const shown = useMemo(() => arrange(tracks, sort, query), [tracks, sort, query]);
+  const moveInPlaylist = lib.moveInPlaylist;
+  // Dragging only makes sense in the playlist's own order, with every song showing.
+  const canReorder = kind === "playlist" && !!playlist && sort === "custom" && !query.trim() && tracks.length > 1;
   const label =
     kind === "playlist" ? t.collection.labelPlaylist : kind === "favorites" ? t.collection.labelFavorites : t.collection.labelHistory;
 
@@ -60,7 +79,7 @@ export default function Collection({ kind }: Props) {
 
   const total = tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
   // The queue holds exactly these tracks, so this collection is the current playback context.
-  const isThisPlaying = tracks.length > 0 && queue.length === tracks.length && queue.every((t) => tracks.some((x) => x.id === t.id));
+  const isThisPlaying = shown.length > 0 && queue.length === shown.length && queue.every((t) => shown.some((x) => x.id === t.id));
   const playing = isThisPlaying && (status === "playing" || status === "loading");
 
   return (
@@ -91,17 +110,17 @@ export default function Collection({ kind }: Props) {
         <PlayDisc
           label={playing ? t.common.pause : t.common.playX(name)}
           px={56}
-          disabled={!tracks.length}
-          onClick={() => (isThisPlaying ? toggle() : playList(tracks, 0))}
+          disabled={!shown.length}
+          onClick={() => (isThisPlaying ? toggle() : playList(shown, 0))}
         >
           {playing ? <PauseIcon size={24} weight="fill" /> : <PlayIcon size={24} weight="fill" />}
         </PlayDisc>
         <IconButton
           label={t.collection.shuffle}
           size="lg"
-          disabled={!tracks.length}
+          disabled={!shown.length}
           onClick={() => {
-            const order = shuffled(tracks);
+            const order = shuffled(shown);
             playList(order, 0);
           }}
         >
@@ -121,9 +140,54 @@ export default function Collection({ kind }: Props) {
         )}
       </div>
 
+      {tracks.length > 1 && (
+        <div className="flex flex-wrap items-center gap-2 px-4 pb-3 md:px-6">
+          <label className="flex h-10 min-w-0 flex-1 items-center gap-2 rounded-full bg-surface-2 px-3.5 ring-1 ring-line focus-within:ring-fg-3 sm:max-w-xs">
+            <MagnifyingGlassIcon size={16} className="shrink-0 text-fg-3" />
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => e.key === "Escape" && query && (e.stopPropagation(), setQuery(""))}
+              placeholder={t.collection.find}
+              aria-label={t.collection.findIn(name)}
+              className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-fg-3 [&::-webkit-search-cancel-button]:hidden"
+            />
+            {query && (
+              <button type="button" onClick={() => setQuery("")} aria-label={t.collection.clearFind} className="-mr-1 text-fg-3 hover:text-fg">
+                <XCircleIcon size={18} weight="fill" />
+              </button>
+            )}
+          </label>
+          <label className="ml-auto flex h-10 items-center gap-1.5 rounded-full px-3 text-sm text-fg-2 hover:bg-surface-2 hover:text-fg">
+            <SortAscendingIcon size={17} className="shrink-0" />
+            <span className="sr-only">{t.collection.sortBy}</span>
+            <select
+              value={sort}
+              onChange={(e) => setSort(e.target.value as SortKey)}
+              aria-label={t.collection.sortBy}
+              className="cursor-pointer appearance-none bg-transparent pr-1 font-medium text-fg outline-none"
+            >
+              {SORTS[kind].map((k) => (
+                <option key={k} value={k}>
+                  {k === "custom" ? t.collection.ownOrder[kind] : t.collection.sorts[k]}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      )}
+
       <div className="px-2 md:px-3">
-        {tracks.length > 0 ? (
-          <TrackList tracks={tracks} playlistId={playlist?.id} showAlbum />
+        {tracks.length > 0 && shown.length === 0 ? (
+          <EmptyState icon={<MagnifyingGlassIcon size={28} />} title={t.collection.noMatch(query.trim())} body={t.collection.noMatchBody} />
+        ) : tracks.length > 0 ? (
+          <TrackList
+            tracks={shown}
+            playlistId={playlist?.id}
+            showAlbum
+            onMove={canReorder ? (from, to) => void moveInPlaylist(playlist!.id, from, to) : undefined}
+          />
         ) : (
           <EmptyState
             icon={<MagnifyingGlassIcon size={28} />}

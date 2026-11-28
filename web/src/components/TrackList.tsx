@@ -12,6 +12,27 @@ import { toast, useUi } from "../stores/ui";
 import { Artwork } from "./Artwork";
 import { Equalizer } from "./Brand";
 import { DownloadBadge, ProgressRing } from "./Download";
+import { SortableList, useSortableRow, type SortableRow } from "./Sortable";
+
+/** The row grid, with a column in front for the drag handle when the list can be reordered. (Written out in full so
+ *  Tailwind finds every class.) */
+const GRID = {
+  row: {
+    album: "grid-cols-[auto_1fr_auto] md:grid-cols-[28px_auto_1fr_auto_auto] lg:grid-cols-[28px_auto_minmax(0,1.4fr)_minmax(0,1fr)_auto_auto]",
+    plain: "grid-cols-[auto_1fr_auto] md:grid-cols-[28px_auto_1fr_auto_auto]",
+    albumHandle:
+      "grid-cols-[auto_auto_1fr_auto] md:grid-cols-[auto_28px_auto_1fr_auto_auto] lg:grid-cols-[auto_28px_auto_minmax(0,1.4fr)_minmax(0,1fr)_auto_auto]",
+    plainHandle: "grid-cols-[auto_auto_1fr_auto] md:grid-cols-[auto_28px_auto_1fr_auto_auto]",
+  },
+  header: {
+    album: "md:grid-cols-[28px_44px_1fr_auto_auto] lg:grid-cols-[28px_44px_minmax(0,1.4fr)_minmax(0,1fr)_auto_auto]",
+    plain: "md:grid-cols-[28px_44px_1fr_auto_auto]",
+    albumHandle: "md:grid-cols-[auto_28px_44px_1fr_auto_auto] lg:grid-cols-[auto_28px_44px_minmax(0,1.4fr)_minmax(0,1fr)_auto_auto]",
+    plainHandle: "md:grid-cols-[auto_28px_44px_1fr_auto_auto]",
+  },
+};
+const columns = (showAlbum: boolean, handle: boolean, header = false) =>
+  GRID[header ? "header" : "row"][`${showAlbum ? "album" : "plain"}${handle ? "Handle" : ""}` as "album"];
 
 /**
  * The row's download slot on wide screens: a button that shows on hover, the progress while the song arrives
@@ -65,9 +86,10 @@ interface RowProps {
   onPlay: () => void;
   playlistId?: string;
   showAlbum: boolean;
+  sortable?: SortableRow;
 }
 
-const TrackRow = memo(function TrackRow({ track, position, onPlay, playlistId, showAlbum }: RowProps) {
+const TrackRow = memo(function TrackRow({ track, position, onPlay, playlistId, showAlbum, sortable }: RowProps) {
   const isCurrent = usePlayer((s) => selectCurrent(s)?.id === track.id);
   const isPlaying = usePlayer((s) => s.status === "playing" || s.status === "loading");
   const isFavorite = useLibrary((s) => s.favorites.some((t) => t.id === track.id));
@@ -87,14 +109,16 @@ const TrackRow = memo(function TrackRow({ track, position, onPlay, playlistId, s
 
   return (
     <li
+      ref={sortable?.ref}
+      style={sortable?.style}
       onContextMenu={menuAt}
       className={cn(
         "group relative grid items-center gap-3 rounded-xl px-2 py-1.5 transition-colors duration-150 hover:bg-surface-2 md:px-3",
-        showAlbum
-          ? "grid-cols-[auto_1fr_auto] md:grid-cols-[28px_auto_1fr_auto_auto] lg:grid-cols-[28px_auto_minmax(0,1.4fr)_minmax(0,1fr)_auto_auto]"
-          : "grid-cols-[auto_1fr_auto] md:grid-cols-[28px_auto_1fr_auto_auto]",
+        columns(showAlbum, !!sortable),
+        sortable?.dragging && "bg-surface-3 shadow-[0_12px_32px_rgb(0_0_0/0.35)]",
       )}
     >
+      {sortable?.handle}
       <button
         type="button"
         onClick={() => (unavailable ? toast(t.downloads.toasts.offlineTrack(track.title), "error") : onPlay())}
@@ -167,6 +191,13 @@ const TrackRow = memo(function TrackRow({ track, position, onPlay, playlistId, s
   );
 });
 
+/** A row that can be dragged by its handle (inside a SortableList). */
+function SortableTrackRow(props: RowProps) {
+  const t = useT();
+  const sortable = useSortableRow(props.track.id, t.reorder.handle(props.track.title));
+  return <TrackRow {...props} sortable={sortable} />;
+}
+
 interface ListProps {
   tracks: Track[];
   /** Full list to queue when a row is played, if `tracks` is only a preview of it. */
@@ -174,9 +205,11 @@ interface ListProps {
   playlistId?: string;
   showAlbum?: boolean;
   header?: boolean;
+  /** Lets the rows be dragged into a new order (a playlist in its own order). */
+  onMove?: (from: number, to: number) => void;
 }
 
-export function TrackList({ tracks, context, playlistId, showAlbum: albumWanted = true, header = true }: ListProps) {
+export function TrackList({ tracks, context, playlistId, showAlbum: albumWanted = true, header = true, onMove }: ListProps) {
   const playList = usePlayer((s) => s.playList);
   const t = useT();
   // Pages ask for the album column where it makes sense; Settings can turn it off everywhere.
@@ -187,11 +220,10 @@ export function TrackList({ tracks, context, playlistId, showAlbum: albumWanted 
         <div
           className={cn(
             "mb-1 hidden items-center gap-3 border-b border-line px-3 pb-2 text-xs font-medium tracking-wide text-fg-3 md:grid",
-            showAlbum
-              ? "md:grid-cols-[28px_44px_1fr_auto_auto] lg:grid-cols-[28px_44px_minmax(0,1.4fr)_minmax(0,1fr)_auto_auto]"
-              : "md:grid-cols-[28px_44px_1fr_auto_auto]",
+            columns(showAlbum, !!onMove, true),
           )}
         >
+          {onMove && <span className="w-6" />}
           <span className="text-center font-mono">#</span>
           <span />
           <span>{t.trackList.title}</span>
@@ -203,18 +235,35 @@ export function TrackList({ tracks, context, playlistId, showAlbum: albumWanted 
           <span className="w-9" />
         </div>
       )}
-      <ul className="flex flex-col">
-        {tracks.map((t, i) => (
-          <TrackRow
-            key={`${t.id}-${i}`}
-            track={t}
-            position={i}
-            playlistId={playlistId}
-            showAlbum={showAlbum}
-            onPlay={() => playList(context ?? tracks, i)}
-          />
-        ))}
-      </ul>
+      {onMove ? (
+        <SortableList ids={tracks.map((t) => t.id)} nameOf={(id) => tracks.find((t) => t.id === id)?.title ?? ""} onMove={onMove}>
+          <ul className="flex flex-col">
+            {tracks.map((t, i) => (
+              <SortableTrackRow
+                key={t.id}
+                track={t}
+                position={i}
+                playlistId={playlistId}
+                showAlbum={showAlbum}
+                onPlay={() => playList(context ?? tracks, i)}
+              />
+            ))}
+          </ul>
+        </SortableList>
+      ) : (
+        <ul className="flex flex-col">
+          {tracks.map((t, i) => (
+            <TrackRow
+              key={`${t.id}-${i}`}
+              track={t}
+              position={i}
+              playlistId={playlistId}
+              showAlbum={showAlbum}
+              onPlay={() => playList(context ?? tracks, i)}
+            />
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

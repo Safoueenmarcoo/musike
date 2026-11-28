@@ -16,6 +16,7 @@ import {
 import { useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useT } from "../i18n";
+import { usePlayback } from "../stores/playback";
 import { capabilities } from "../lib/api";
 import { cn, formatTime } from "../lib/format";
 import type { Track } from "../lib/types";
@@ -207,5 +208,24 @@ export function ModeSwitch({ className }: { className?: string }) {
         </button>
       )}
     </div>
+  );
+}
+
+/** Shows the speed while it isn't normal, so it's never forgotten; tapping it goes back to 1×. */
+export function SpeedChip({ className }: { className?: string }) {
+  const speed = usePlayback((s) => s.speed);
+  const setSpeed = usePlayback((s) => s.setSpeed);
+  const t = useT();
+  if (speed === 1) return null;
+  return (
+    <button
+      type="button"
+      onClick={() => setSpeed(1)}
+      aria-label={t.sound.resetSpeed(speed)}
+      title={t.sound.resetSpeed(speed)}
+      className={cn("h-8 rounded-full bg-accent-soft px-2.5 font-mono text-[12px] font-semibold text-accent-text tabular-nums", className)}
+    >
+      {t.sound.speedValue(speed)}
+    </button>
   );
 }

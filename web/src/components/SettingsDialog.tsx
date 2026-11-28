@@ -16,41 +16,12 @@ import { useUi } from "../stores/ui";
 import { BackupSection } from "./BackupSection";
 import { AccentPicker, LayoutSection } from "./CustomizeSection";
 import { DownloadsSection } from "./DownloadsSection";
+import { Segmented } from "./Segmented";
+import { SoundSection } from "./SoundSection";
 import { SyncSection } from "./SyncSection";
 import { UpdateSection } from "./UpdateSection";
 import { Modal } from "./Modal";
 
-function Segmented<T extends string>({
-  label,
-  value,
-  options,
-  onChange,
-}: {
-  label: string;
-  value: T;
-  options: [T, ReactNode][];
-  onChange: (v: T) => void;
-}) {
-  return (
-    <div role="radiogroup" aria-label={label} className="flex rounded-full bg-surface-1 p-1 ring-1 ring-line">
-      {options.map(([v, content]) => (
-        <button
-          key={v}
-          type="button"
-          role="radio"
-          aria-checked={value === v}
-          onClick={() => onChange(v)}
-          className={cn(
-            "flex h-9 flex-1 items-center justify-center gap-1.5 rounded-full px-3 text-[13px] font-medium transition-colors duration-200",
-            value === v ? "bg-surface-4 text-fg shadow-[inset_0_1px_0_var(--highlight)]" : "text-fg-2 hover:text-fg",
-          )}
-        >
-          {content}
-        </button>
-      ))}
-    </div>
-  );
-}
 
 function Dependency({ name, role, path, fix }: { name: string; role: string; path: string | null; fix: string }) {
   const t = useT();
@@ -156,6 +127,8 @@ export function SettingsDialog() {
         </section>
 
         <LayoutSection />
+
+        <SoundSection />
 
         <UpdateSection />
 

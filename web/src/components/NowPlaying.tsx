@@ -16,7 +16,7 @@ import { selectCurrent, usePlayer, useStatusText } from "../player/player";
 import { useThumb } from "../stores/downloads";
 import { useUi, type PanelTab } from "../stores/ui";
 import { Artwork } from "./Artwork";
-import { FavoriteButton, ModeSwitch, Scrubber, Transport } from "./Controls";
+import { FavoriteButton, ModeSwitch, Scrubber, SpeedChip, Transport } from "./Controls";
 import { DownloadButton } from "./Download";
 import { IconButton } from "./IconButton";
 import { QueueList } from "./Queue";
@@ -306,6 +306,7 @@ export function NowPlayingSheet({ open, onClose }: { open: boolean; onClose: () 
                   <TrackHeading track={track} large />
                   <Scrubber touch />
                   <Transport big />
+                  <SpeedChip className="self-center" />
                   <ModeSwitch className="justify-center" />
                 </div>
               </div>

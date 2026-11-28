@@ -7,6 +7,8 @@ export interface Track {
   thumb: string;
   art: string;
   kind: "song" | "video";
+  /** When it went into a playlist or the favorites (ms). Missing on older entries. */
+  addedAt?: number;
 }
 
 export interface Playlist {

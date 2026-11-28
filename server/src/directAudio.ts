@@ -21,6 +21,8 @@ export interface DirectAudio {
   duration: number;
   /** When the URL stops working (ms). */
   expiresAt: number;
+  /** A smaller stream of the same song (data saver), when YouTube offers one. */
+  low?: { url: string; mime: string };
 }
 
 export const validClients = (v: unknown): string[] | null =>
@@ -39,6 +41,26 @@ export async function fetchRemoteClients(key: "clients" | "ios" = "clients"): Pr
   }
 }
 
+interface AudioFormat {
+  url: string;
+  mime_type?: string;
+  bitrate?: number;
+}
+
+/**
+ * The stream to play: AAC (m4a) first, since it plays everywhere, at the highest bitrate. And for the data saver the
+ * smallest one, AAC first again, when it is clearly smaller (around 48 kbps against 128 or more).
+ */
+export function pickAudioFormats<F extends AudioFormat>(formats: F[]): { best?: F; low?: F } {
+  const aacFirst = (a: F, b: F) => Number(b.mime_type?.startsWith("audio/mp4")) - Number(a.mime_type?.startsWith("audio/mp4"));
+  const best = formats.slice().sort((a, b) => aacFirst(a, b) || (b.bitrate ?? 0) - (a.bitrate ?? 0))[0];
+  if (!best) return {};
+  const low = formats
+    .filter((f) => (f.bitrate ?? 0) > 0 && (f.bitrate ?? 0) < (best.bitrate ?? 0) * 0.7)
+    .sort((a, b) => aacFirst(a, b) || (a.bitrate ?? 0) - (b.bitrate ?? 0))[0];
+  return { best, low };
+}
+
 /** Tries each client in turn. Throws with YouTube's reason (or an empty message) when none of them has audio. */
 export async function directAudio(id: string, clients: string[], lang?: Lang): Promise<DirectAudio> {
   let reason = "";
@@ -53,13 +75,11 @@ export async function directAudio(id: string, clients: string[], lang?: Lang): P
       const formats: any[] = [...(info.streaming_data?.adaptive_formats ?? []), ...(info.streaming_data?.formats ?? [])].filter(
         (f) => f.has_audio && !f.has_video && typeof f.url === "string",
       );
-      // AAC (m4a) first: it plays everywhere. Highest bitrate within the same kind.
-      const best = formats.sort(
-        (a, b) => Number(b.mime_type?.startsWith("audio/mp4")) - Number(a.mime_type?.startsWith("audio/mp4")) || (b.bitrate ?? 0) - (a.bitrate ?? 0),
-      )[0];
+      const { best, low } = pickAudioFormats(formats);
       if (!best) continue;
       const expire = Number(new URL(best.url).searchParams.get("expire")) * 1000;
       return {
+        ...(low ? { low: { url: low.url, mime: low.mime_type?.startsWith("audio/webm") ? "audio/webm" : "audio/mp4" } } : {}),
         url: best.url,
         mime: best.mime_type?.startsWith("audio/webm") ? "audio/webm" : "audio/mp4",
         title: info.basic_info?.title ?? "",

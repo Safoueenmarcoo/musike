@@ -318,6 +318,16 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
     return library.addToPlaylist((req.params as { pid: string }).pid, tracks);
   });
 
+  /** The playlist's songs in a new order: `{ ids: [video ids] }`. */
+  app.put("/api/playlists/:pid/order", async (req) => {
+    const { ids } = (req.body ?? {}) as { ids?: unknown };
+    if (!Array.isArray(ids)) throw new HttpError(400, msg("invalidTrack"));
+    return library.reorderPlaylist(
+      (req.params as { pid: string }).pid,
+      ids.slice(0, 5000).filter((id): id is string => typeof id === "string" && VIDEO_ID.test(id)),
+    );
+  });
+
   app.delete("/api/playlists/:pid/tracks/:id", async (req) =>
     library.removeFromPlaylist((req.params as { pid: string }).pid, videoId(req.params)),
   );

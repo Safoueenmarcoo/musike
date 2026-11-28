@@ -2,16 +2,73 @@ import { QueueIcon, XIcon } from "@phosphor-icons/react";
 import { useT } from "../i18n";
 import { cn, formatTime } from "../lib/format";
 import { usePlayer } from "../player/player";
+import type { Track } from "../lib/types";
 import { Artwork } from "./Artwork";
 import { Equalizer } from "./Brand";
+import { SortableList, useSortableRow, type SortableRow } from "./Sortable";
+
+interface QueueRowProps {
+  track: Track;
+  i: number;
+  isCurrent: boolean;
+  live: boolean;
+  sortable?: SortableRow;
+}
+
+function QueueRow({ track, i, isCurrent, live, sortable }: QueueRowProps) {
+  const t = useT();
+  const jumpTo = usePlayer((s) => s.jumpTo);
+  const removeAt = usePlayer((s) => s.removeAt);
+  return (
+    <li
+      ref={sortable?.ref}
+      style={sortable?.style}
+      className={cn(
+        "group relative flex items-center gap-3 rounded-xl px-2 py-1.5 hover:bg-surface-3",
+        sortable?.dragging && "bg-surface-3 shadow-[0_12px_32px_rgb(0_0_0/0.35)]",
+      )}
+    >
+      <button type="button" onClick={() => jumpTo(i)} className="absolute inset-0 rounded-xl" aria-label={t.common.playX(track.title)} />
+      {sortable?.handle}
+      <Artwork src={track.thumb} trackId={track.id} className="pointer-events-none size-10 rounded-[8px]" />
+      <div className="pointer-events-none min-w-0 flex-1">
+        <p className={cn("truncate text-sm font-medium", isCurrent ? "text-accent-text" : "text-fg")}>{track.title}</p>
+        <p className="truncate text-xs text-fg-2">{track.artist}</p>
+      </div>
+      {isCurrent ? (
+        <Equalizer live={live} className="mr-2" />
+      ) : (
+        <>
+          <span className="pointer-events-none font-mono text-xs text-fg-3 tabular-nums group-hover:hidden">
+            {track.duration ? formatTime(track.duration) : ""}
+          </span>
+          <button
+            type="button"
+            onClick={() => removeAt(i)}
+            aria-label={t.queue.removeX(track.title)}
+            title={t.queue.remove}
+            className="relative z-10 hidden size-8 place-items-center rounded-full text-fg-2 hover:bg-surface-4 hover:text-fg group-hover:grid max-md:grid"
+          >
+            <XIcon size={16} />
+          </button>
+        </>
+      )}
+    </li>
+  );
+}
+
+function SortableQueueRow(props: QueueRowProps & { id: string }) {
+  const t = useT();
+  const sortable = useSortableRow(props.id, t.reorder.handle(props.track.title));
+  return <QueueRow {...props} sortable={sortable} />;
+}
 
 export function QueueList({ compact = false }: { compact?: boolean }) {
   const t = useT();
   const queue = usePlayer((s) => s.queue);
   const index = usePlayer((s) => s.index);
   const live = usePlayer((s) => s.status === "playing" || s.status === "loading");
-  const jumpTo = usePlayer((s) => s.jumpTo);
-  const removeAt = usePlayer((s) => s.removeAt);
+  const moveInQueue = usePlayer((s) => s.moveInQueue);
   const clearUpcoming = usePlayer((s) => s.clearUpcoming);
   const autoRadio = usePlayer((s) => s.autoRadio);
   const setAutoRadio = usePlayer((s) => s.setAutoRadio);
@@ -31,43 +88,21 @@ export function QueueList({ compact = false }: { compact?: boolean }) {
     );
   }
 
-  const row = (i: number, isCurrent: boolean) => {
-    const track = queue[i];
-    return (
-      <li key={`${track.id}-${i}`} className="group relative flex items-center gap-3 rounded-xl px-2 py-1.5 hover:bg-surface-3">
-        <button type="button" onClick={() => jumpTo(i)} className="absolute inset-0 rounded-xl" aria-label={t.common.playX(track.title)} />
-        <Artwork src={track.thumb} trackId={track.id} className="pointer-events-none size-10 rounded-[8px]" />
-        <div className="pointer-events-none min-w-0 flex-1">
-          <p className={cn("truncate text-sm font-medium", isCurrent ? "text-accent-text" : "text-fg")}>{track.title}</p>
-          <p className="truncate text-xs text-fg-2">{track.artist}</p>
-        </div>
-        {isCurrent ? (
-          <Equalizer live={live} className="mr-2" />
-        ) : (
-          <>
-            <span className="pointer-events-none font-mono text-xs text-fg-3 tabular-nums group-hover:hidden">
-              {track.duration ? formatTime(track.duration) : ""}
-            </span>
-            <button
-              type="button"
-              onClick={() => removeAt(i)}
-              aria-label={t.queue.removeX(track.title)}
-              title={t.queue.remove}
-              className="relative z-10 hidden size-8 place-items-center rounded-full text-fg-2 hover:bg-surface-4 hover:text-fg group-hover:grid max-md:grid"
-            >
-              <XIcon size={16} />
-            </button>
-          </>
-        )}
-      </li>
-    );
-  };
+  // The same song can be queued twice: each copy gets its own id for dragging.
+  const seen = new Map<string, number>();
+  const upcomingIds = upcoming.map((track) => {
+    const n = (seen.get(track.id) ?? 0) + 1;
+    seen.set(track.id, n);
+    return `${track.id}:${n}`;
+  });
 
   return (
     <div className={cn("flex flex-col gap-4", compact ? "" : "pb-4")}>
       <section>
         <h3 className="px-2 pb-1.5 text-xs font-medium text-fg-3">{t.queue.nowPlaying}</h3>
-        <ul>{row(index, true)}</ul>
+        <ul>
+          <QueueRow track={current} i={index} isCurrent live={live} />
+        </ul>
       </section>
 
       <section>
@@ -82,7 +117,17 @@ export function QueueList({ compact = false }: { compact?: boolean }) {
           )}
         </div>
         {upcoming.length ? (
-          <ul>{upcoming.map((_, k) => row(index + 1 + k, false))}</ul>
+          <SortableList
+            ids={upcomingIds}
+            nameOf={(id) => upcoming[upcomingIds.indexOf(id)]?.title ?? ""}
+            onMove={(from, to) => moveInQueue(index + 1 + from, index + 1 + to)}
+          >
+            <ul>
+              {upcoming.map((track, k) => (
+                <SortableQueueRow key={upcomingIds[k]} id={upcomingIds[k]!} track={track} i={index + 1 + k} isCurrent={false} live={live} />
+              ))}
+            </ul>
+          </SortableList>
         ) : (
           <p className="px-2 text-sm text-fg-2">
             {t.queue.nothingQueued} {autoRadio ? t.queue.radioContinues : ""}

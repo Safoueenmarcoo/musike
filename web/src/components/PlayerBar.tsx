@@ -4,7 +4,7 @@ import { useT } from "../i18n";
 import { selectCurrent, usePlayer, useStatusText } from "../player/player";
 import { useUi } from "../stores/ui";
 import { Artwork } from "./Artwork";
-import { FavoriteButton, ModeSwitch, Scrubber, Transport, Volume } from "./Controls";
+import { FavoriteButton, ModeSwitch, Scrubber, SpeedChip, Transport, Volume } from "./Controls";
 import { DownloadButton } from "./Download";
 import { IconButton } from "./IconButton";
 
@@ -53,6 +53,7 @@ export function PlayerBar() {
         </div>
 
         <div className="flex items-center justify-end gap-1">
+          <SpeedChip />
           <ModeSwitch className="max-2xl:hidden" />
           <IconButton
             label={t.player.queue}

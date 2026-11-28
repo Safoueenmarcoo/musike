@@ -97,6 +97,21 @@ export const en = {
     deleteBody: (name: string, tracks: number) =>
       `"${name}" and its list of ${count(tracks, "track", "tracks")} will be deleted. This can't be undone.`,
     delete: "Delete",
+    find: "Find in this list",
+    findIn: (name: string) => `Find in ${name}`,
+    clearFind: "Clear",
+    sortBy: "Sort by",
+    sorts: {
+      custom: "Custom order",
+      added: "Date added",
+      title: "Title",
+      artist: "Artist",
+      album: "Album",
+      duration: "Duration",
+    },
+    ownOrder: { playlist: "Custom order", favorites: "Date added", history: "Recently played" },
+    noMatch: (query: string) => `Nothing here matches "${query}"`,
+    noMatchBody: "Try another word: titles, artists and albums are searched.",
   },
 
   dialogs: {
@@ -521,6 +536,46 @@ export const en = {
     viaWifi: "same Wi-Fi",
     viaInternet: "over the internet",
     limited: "The free relay's daily limit is used up: devices on other networks show up again tomorrow. On the same Wi-Fi everything still works.",
+  },
+
+  sound: {
+    title: "Sound",
+    speed: "Playback speed",
+    speedValue: (x: number) => `${x}×`,
+    resetSpeed: (x: number) => `Playing at ${x}×. Back to normal speed`,
+    equalizer: "Equalizer",
+    equalizerBody: "Shapes the sound on this device.",
+    preset: "Preset",
+    presets: {
+      flat: "Flat",
+      bassBoost: "Bass boost",
+      bassCut: "Bass cut",
+      trebleBoost: "Treble boost",
+      vocal: "Vocal",
+      acoustic: "Acoustic",
+      electronic: "Electronic",
+      rock: "Rock",
+      pop: "Pop",
+      loudness: "Loudness",
+      custom: "Custom",
+    },
+    band: (hz: number) => (hz >= 1000 ? `${hz / 1000} kHz` : `${hz} Hz`),
+    gain: (db: number) => `${db > 0 ? "+" : ""}${db} dB`,
+    reset: "Reset",
+    dataSaver: "Data saver",
+    dataSaverBody: "Plays a lighter stream (about a third of the data). Downloads keep full quality.",
+    dataSaverOff: "Off",
+    dataSaverMobile: "On mobile data",
+    dataSaverAlways: "Always",
+  },
+
+  reorder: {
+    handle: (title: string) => `Move ${title}`,
+    instructions: "To move a song, press Space or Enter on its handle, use the arrow keys, then press Space or Enter again to drop it, or Escape to cancel.",
+    picked: (title: string, at: number, of: number) => `Picked up ${title}, position ${at} of ${of}.`,
+    over: (title: string, at: number, of: number) => `${title} moved to position ${at} of ${of}.`,
+    dropped: (title: string, at: number, of: number) => `${title} dropped at position ${at} of ${of}.`,
+    cancelled: (title: string) => `Move cancelled. ${title} is back where it was.`,
   },
 
   updates: {

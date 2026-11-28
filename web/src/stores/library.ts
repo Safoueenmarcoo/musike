@@ -16,6 +16,8 @@ interface LibraryState extends Library {
   deletePlaylist: (id: string) => Promise<void>;
   addToPlaylist: (id: string, t: Track | Track[]) => Promise<void>;
   removeFromPlaylist: (id: string, trackId: string) => Promise<void>;
+  /** Moves a song within a playlist: shown at once, then saved. */
+  moveInPlaylist: (id: string, from: number, to: number) => Promise<void>;
 }
 
 const replacePlaylist = (list: Playlist[], p: Playlist) => list.map((x) => (x.id === p.id ? p : x));
@@ -116,6 +118,23 @@ export const useLibrary = create<LibraryState>((set, get) => ({
       if (!Array.isArray(tracks) || added === 1) toast(t.toasts.addedTo(p.name));
       else toast(added ? t.toasts.addedManyTo(added, p.name) : t.toasts.allAlreadyIn(p.name));
     } catch (e) {
+      toast((e as Error).message, "error");
+    }
+  },
+
+  moveInPlaylist: async (id, from, to) => {
+    const prev = get().playlists;
+    const p = prev.find((x) => x.id === id);
+    if (!p || from === to || from < 0 || to < 0 || from >= p.tracks.length || to >= p.tracks.length) return;
+    const tracks = p.tracks.slice();
+    const [moved] = tracks.splice(from, 1);
+    tracks.splice(to, 0, moved!);
+    set({ playlists: replacePlaylist(prev, { ...p, tracks }) });
+    try {
+      const saved = await api.reorderPlaylist(id, tracks.map((t) => t.id));
+      set((s) => ({ playlists: replacePlaylist(s.playlists, saved) }));
+    } catch (e) {
+      set({ playlists: prev });
       toast((e as Error).message, "error");
     }
   },

@@ -31,6 +31,9 @@ import { media } from "./media";
 import { nativeStorage, nativeStore } from "./storage";
 import { config } from "./shims/config";
 import { forgetUrl, resolveAudio } from "./streams";
+import { streamAddress } from "./streamUrl";
+import { everRouted } from "../lib/equalizer";
+import { savingData } from "../stores/playback";
 
 export { updater } from "./update";
 
@@ -149,6 +152,7 @@ export const api: MusikeApi = {
   deletePlaylist: (id) => call(() => library.deletePlaylist(id)),
   addToPlaylist: (id, t) => call(() => library.addToPlaylist(id, Array.isArray(t) ? tracks(t) : library.sanitizeTrack(t))),
   removeFromPlaylist: (id, trackId) => call(() => library.removeFromPlaylist(id, trackId)),
+  reorderPlaylist: (id, ids) => call(() => library.reorderPlaylist(id, ids.filter((x) => typeof x === "string").slice(0, 5000))),
   importLibrary: (backup, mode) =>
     call(async () => {
       const b = (backup ?? {}) as { format?: unknown; version?: unknown; library?: unknown };
@@ -206,7 +210,7 @@ export async function streamSource(id: string): Promise<string> {
     await downloadsReady();
     return fileUrl(saved.file);
   }
-  return (await resolveAudio(id)).url;
+  return streamAddress(await resolveAudio(id), { saveData: savingData(), proxy: everRouted(), origin: location.origin });
 }
 
 /** Where a downloaded song's saved cover is: an image that loads with no internet. */
@@ -225,4 +229,4 @@ export async function saveFile(name: string, text: string) {
 
 export const systemMedia = media;
 
-export const capabilities = { video: false, engineSettings: false, retryOnError: true, downloads: downloadsAvailable };
+export const capabilities = { video: false, engineSettings: false, retryOnError: true, downloads: downloadsAvailable, dataSaver: true };

@@ -65,7 +65,10 @@ Musike started from the idea behind the old Discord music bots: a server that fe
 - **Artists:** greatest hits, plus every album and single
 - **Albums:** open any album and play it in its original order, shuffle it, or save it as a playlist in one click
 - **Search a list:** type several songs separated by commas ("Bohemian Rhapsody, Hotel California, …"). Musike finds each one, picks the best match (you can swap it) and lets you play, favorite or send them all to a playlist
-- Queue with play next, shuffle and repeat (queue or track)
+- Queue with play next, shuffle and repeat (queue or track); drag the songs coming up into a new order
+- **Playback speed** from 0.5× to 2× (Settings > Sound), with a badge in the player while it isn't 1×
+- **Equalizer** with six bands and presets (Bass boost, Vocal, Rock…), on the computer and on Android
+- **Data saver** on Android: a lighter stream on mobile data, or always (downloads keep full quality)
 - **Autoplay radio:** when the queue ends, it keeps going with similar songs
 - Instant seeking (HTTP Range streaming) and the next track preloaded
 
@@ -77,6 +80,8 @@ Musike started from the idea behind the old Discord music bots: a server that fe
 
 **Library**
 - Playlists, Favorites and recently played history
+- **Search inside a list** and **sort** it by title, artist, album, duration or date added (each playlist remembers its sort)
+- **Drag songs** into a new order in a playlist (mouse, finger or keyboard); the new order syncs
 - Select many tracks at once to play, favorite or add to a playlist
 - **Backup to a file** to move everything to another Musike: merge or replace, with a preview before importing
 
@@ -452,6 +457,7 @@ Every route answers JSON. Errors look like `{ "error": "message", "code"?: "tool
 | `POST` | `/api/playlists` | Creates a playlist |
 | `PATCH` / `DELETE` | `/api/playlists/:pid` | Renames / deletes |
 | `POST` / `DELETE` | `/api/playlists/:pid/tracks[/:id]` | Adds (one track or `{ tracks }`) / removes a track |
+| `PUT` | `/api/playlists/:pid/order` | Puts the songs in a new order (`{ ids }`) |
 | `POST` | `/api/library/import` | Imports a backup (`{ backup, mode: "merge" \| "replace" }`) |
 | `GET` | `/api/downloads` | Downloaded songs, downloads under way and the space used |
 | `POST` | `/api/downloads` | Queues tracks for download (`{ tracks }`) |

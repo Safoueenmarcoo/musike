@@ -133,6 +133,8 @@ export interface MusikeApi {
   deletePlaylist(id: string): Promise<void>;
   addToPlaylist(id: string, t: Track | Track[]): Promise<Playlist>;
   removeFromPlaylist(id: string, trackId: string): Promise<Playlist>;
+  /** The playlist's songs in the order of `ids`. */
+  reorderPlaylist(id: string, ids: string[]): Promise<Playlist>;
   importLibrary(backup: unknown, mode: "merge" | "replace"): Promise<ImportResult>;
 
   /** Songs saved for offline listening, and the downloads under way. */

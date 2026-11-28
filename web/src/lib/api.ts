@@ -80,6 +80,7 @@ export const api: MusikeApi = {
     request<Playlist>(`/api/playlists/${id}/tracks`, { method: "POST", json: Array.isArray(t) ? { tracks: t } : t }),
   removeFromPlaylist: (id: string, trackId: string) =>
     request<Playlist>(`/api/playlists/${id}/tracks/${trackId}`, { method: "DELETE" }),
+  reorderPlaylist: (id: string, ids: string[]) => request<Playlist>(`/api/playlists/${id}/order`, { method: "PUT", json: { ids } }),
 
   importLibrary: (backup: unknown, mode: "merge" | "replace") =>
     request<ImportResult>("/api/library/import", { method: "POST", json: { backup, mode } }),
@@ -149,7 +150,7 @@ export const systemMedia: SystemMedia | null = null;
  * What this build can do. The Android build has no video yet, no yt-dlp to manage, and retries expired streams.
  * Downloads are kept where the music is fetched: on the computer running Musike here, on the phone on Android.
  */
-export const capabilities = { video: true, engineSettings: true, retryOnError: false, downloads: true };
+export const capabilities = { video: true, engineSettings: true, retryOnError: false, downloads: true, dataSaver: false };
 
 /** Media elements hide the HTTP error body; fetch it to show the real reason. */
 export async function explainStreamError(url: string): Promise<{ message: string; code?: ErrorCode }> {
