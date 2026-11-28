@@ -239,9 +239,10 @@ export const pt: Messages = {
     clearRecent: "Limpar",
     idleTitle: "O que vai tocar hoje?",
     idleBody:
-      "Busque por música, artista ou álbum. Para clipes e ao vivo, use a aba Vídeos. Também dá para colar um link do YouTube.",
+      "Busque por música, artista, álbum ou playlist. Para clipes e ao vivo, use a aba Vídeos. Também dá para colar um link do YouTube.",
     exploreGenres: "Explorar por gênero",
     albums: "Álbuns",
+    playlists: "Playlists",
   },
 
   batch: {
@@ -309,6 +310,18 @@ export const pt: Messages = {
     openPlaylist: "Abrir playlist",
     noTracks: "Nenhuma faixa para tocar",
     noTracksBody: "O YouTube Music não oferece as faixas deste álbum aqui.",
+  },
+
+  youtubePlaylist: {
+    fallbackName: "Playlist",
+    openFailed: "Não deu para abrir esta playlist",
+    noTracksBody: "O YouTube Music não oferece as músicas desta playlist aqui.",
+    save: "Salvar na biblioteca",
+    download: "Baixar",
+    downloadTitle: (title) => `Baixar ${title}`,
+    openSaved: "Abrir na biblioteca",
+    failed: (title, reason) => `Não deu para baixar "${title}": ${reason}`,
+    downloadHint: "Salva na biblioteca como playlist e fica baixada",
   },
 
   settings: {

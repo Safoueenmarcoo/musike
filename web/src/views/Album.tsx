@@ -1,28 +1,34 @@
-import { ArrowRightIcon, MusicNotesIcon, PauseIcon, PlayIcon, PlaylistIcon, ShuffleIcon, WarningCircleIcon } from "@phosphor-icons/react";
+import { ArrowCircleDownIcon, ArrowRightIcon, MusicNotesIcon, PauseIcon, PlayIcon, PlaylistIcon, ShuffleIcon, WarningCircleIcon } from "@phosphor-icons/react";
 import { useState } from "react";
 import { Link, useLocation, useParams } from "react-router";
 import { Artwork } from "../components/Artwork";
-import { DownloadAllButton } from "../components/Download";
+import { DownloadAllButton, ProgressRing } from "../components/Download";
 import { IconButton, PlayDisc } from "../components/IconButton";
 import { BackButton, EmptyState, PageHeader } from "../components/Page";
 import { SelectableTrackList } from "../components/Selection";
 import { TrackListSkeleton } from "../components/TrackList";
 import { useRemote } from "../hooks/useRemote";
 import { useI18n, useT } from "../i18n";
-import { api } from "../lib/api";
+import { api, capabilities } from "../lib/api";
 import { shuffled } from "../lib/format";
 import { paths } from "../lib/routes";
 import type { AlbumPage } from "../lib/types";
 import { usePlayer } from "../player/player";
+import { saveAndDownload, savedCopy } from "../lib/youtubePlaylists";
+import { useDownloads } from "../stores/downloads";
 import { useLibrary } from "../stores/library";
 
-/** An album, its tracks in their original order: play it whole, shuffle it, save it or pick from it. */
-export default function Album() {
+/**
+ * An album, its tracks in their original order: play it whole, shuffle it, save it or pick from it. A YouTube
+ * playlist (`source="playlist"`) opens here too; its Download saves it to the library and keeps that copy downloaded.
+ */
+export default function Album({ source = "album" }: { source?: "album" | "playlist" }) {
   const { id = "" } = useParams();
   const location = useLocation();
   const lang = useI18n((s) => s.lang);
   const t = useT();
-  const page = useRemote<AlbumPage>(`album:${lang}:${id}`, (signal) => api.album(id, signal));
+  const isPlaylist = source === "playlist";
+  const page = useRemote<AlbumPage>(`${source}:${lang}:${id}`, (signal) => (isPlaylist ? api.youtubePlaylist(id, signal) : api.album(id, signal)));
   const playList = usePlayer((s) => s.playList);
   const toggle = usePlayer((s) => s.toggle);
   const queue = usePlayer((s) => s.queue);
@@ -30,10 +36,14 @@ export default function Album() {
   const createPlaylist = useLibrary((s) => s.createPlaylist);
   const [saved, setSaved] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [keeping, setKeeping] = useState(false);
 
   const album = page.status === "ok" ? page.data : null;
   const tracks = album?.tracks ?? [];
-  const title = album?.title || (location.state as { name?: string } | null)?.name || t.album.fallbackName;
+  const title = album?.title || (location.state as { name?: string } | null)?.name || (isPlaylist ? t.youtubePlaylist.fallbackName : t.album.fallbackName);
+  // A YouTube playlist saved earlier (here, from search, or on another synced device) and whether it's kept downloaded.
+  const copy = useLibrary((s) => (isPlaylist && album ? savedCopy(s.playlists, title) : null));
+  const kept = useDownloads((s) => !!copy && s.offline.playlists.includes(copy.id));
   // The queue holds exactly this album: the big button pauses and resumes instead of starting over.
   const isThisPlaying = tracks.length > 0 && queue.length === tracks.length && queue.every((q, i) => q.id === tracks[i]?.id);
   const playing = isThisPlaying && (status === "playing" || status === "loading");
@@ -41,7 +51,7 @@ export default function Album() {
   const save = async () => {
     if (!album) return;
     setSaving(true);
-    const p = await createPlaylist(album.artist ? `${album.title} · ${album.artist}` : album.title, tracks);
+    const p = await createPlaylist(isPlaylist || !album.artist ? title : `${album.title} · ${album.artist}`, tracks);
     setSaving(false);
     if (p) setSaved(p.id);
   };
@@ -91,9 +101,9 @@ export default function Album() {
           <IconButton label={t.album.shuffle} size="lg" onClick={() => playList(shuffled(tracks), 0)}>
             <ShuffleIcon size={24} />
           </IconButton>
-          {saved ? (
+          {saved || copy ? (
             <Link
-              to={paths.playlist(saved)}
+              to={paths.playlist(saved ?? copy!.id)}
               className="ml-1 flex h-11 items-center gap-2 rounded-full bg-accent-soft px-4 text-sm font-medium text-accent-text"
             >
               {t.album.openPlaylist} <ArrowRightIcon size={16} />
@@ -105,10 +115,30 @@ export default function Album() {
               onClick={() => void save()}
               className="ml-1 flex h-11 items-center gap-2 rounded-full bg-surface-3 px-4 text-sm font-medium transition-transform hover:bg-surface-4 active:scale-[0.97] disabled:opacity-60"
             >
-              <PlaylistIcon size={18} /> {t.album.saveAsPlaylist}
+              <PlaylistIcon size={18} /> {isPlaylist ? t.youtubePlaylist.save : t.album.saveAsPlaylist}
             </button>
           )}
-          <DownloadAllButton tracks={tracks} variant="pill" />
+          {!isPlaylist ? (
+            <DownloadAllButton tracks={tracks} variant="pill" />
+          ) : kept && copy ? (
+            <DownloadAllButton tracks={copy.tracks} collection={{ kind: "playlist", id: copy.id }} variant="pill" />
+          ) : (
+            capabilities.downloads && (
+              <button
+                type="button"
+                disabled={keeping}
+                title={t.youtubePlaylist.downloadHint}
+                onClick={async () => {
+                  setKeeping(true);
+                  await saveAndDownload({ ...album, title });
+                  setKeeping(false);
+                }}
+                className="flex h-11 items-center gap-2 rounded-full bg-accent px-4 text-sm font-semibold text-accent-ink transition-transform active:scale-[0.97] disabled:opacity-60"
+              >
+                {keeping ? <ProgressRing value={null} size={18} /> : <ArrowCircleDownIcon size={18} />} {t.youtubePlaylist.download}
+              </button>
+            )
+          )}
         </div>
       )}
 
@@ -117,7 +147,7 @@ export default function Album() {
       {page.status === "error" && (
         <EmptyState
           icon={<WarningCircleIcon size={28} />}
-          title={t.album.openFailed}
+          title={isPlaylist ? t.youtubePlaylist.openFailed : t.album.openFailed}
           body={page.message}
           action={
             <button
@@ -135,7 +165,7 @@ export default function Album() {
         (tracks.length ? (
           <SelectableTrackList key={id} tracks={tracks} numbered />
         ) : (
-          <EmptyState icon={<MusicNotesIcon size={28} />} title={t.album.noTracks} body={t.album.noTracksBody} />
+          <EmptyState icon={<MusicNotesIcon size={28} />} title={t.album.noTracks} body={isPlaylist ? t.youtubePlaylist.noTracksBody : t.album.noTracksBody} />
         ))}
     </div>
   );

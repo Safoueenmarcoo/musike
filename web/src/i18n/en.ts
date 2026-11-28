@@ -245,9 +245,10 @@ export const en = {
     clearRecent: "Clear",
     idleTitle: "What's playing today?",
     idleBody:
-      "Search for a song, artist or album. For music videos and live performances, use the Videos tab. You can also paste a YouTube link.",
+      "Search for a song, artist, album or playlist. For music videos and live performances, use the Videos tab. You can also paste a YouTube link.",
     exploreGenres: "Browse by genre",
     albums: "Albums",
+    playlists: "Playlists",
   },
 
   batch: {
@@ -315,6 +316,18 @@ export const en = {
     openPlaylist: "Open playlist",
     noTracks: "No playable tracks",
     noTracksBody: "YouTube Music doesn't offer this album's tracks here.",
+  },
+
+  youtubePlaylist: {
+    fallbackName: "Playlist",
+    openFailed: "Couldn't open this playlist",
+    noTracksBody: "YouTube Music doesn't offer this playlist's songs here.",
+    save: "Save to library",
+    download: "Download",
+    downloadTitle: (title: string) => `Download ${title}`,
+    openSaved: "Open in library",
+    failed: (title: string, reason: string) => `Couldn't download "${title}": ${reason}`,
+    downloadHint: "Saved to your library as a playlist and kept downloaded",
   },
 
   settings: {

@@ -6,6 +6,8 @@ export const paths = {
   genre: (id: string) => `/search/genre/${encodeURIComponent(id)}`,
   artist: (id: string) => `/search/artist/${id}`,
   album: (id: string) => `/search/album/${id}`,
+  /** A YouTube playlist; `playlist` below is one of the library's. */
+  youtubePlaylist: (id: string) => `/search/playlist/${id}`,
   library: "/library",
   favorites: "/favorites",
   history: "/history",

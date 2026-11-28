@@ -99,6 +99,17 @@ export interface AlbumCard {
   art: string;
 }
 
+/** A YouTube playlist as a cover in search results. */
+export interface PlaylistCard {
+  id: string;
+  title: string;
+  author: string;
+  /** YouTube Music's own line under the title: "Spotify • 1.2M views". */
+  info: string;
+  thumb: string;
+  art: string;
+}
+
 export interface ArtistPage {
   id: string;
   name: string;

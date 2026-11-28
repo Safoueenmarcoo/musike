@@ -64,6 +64,23 @@ export interface AlbumPage {
 }
 
 export const ALBUM_ID = /^MPRE[\w-]{6,60}$/;
+/** A YouTube playlist, without the "VL" browse prefix: users' (PL…), YouTube Music's own (RDCLAK…), album lists (OLAK…). */
+export const PLAYLIST_ID = /^(PL|RD|OL|LM|UU|FL|EL)[\w-]{10,80}$/;
+
+/** A YouTube playlist as a cover in search results. */
+export interface PlaylistCard {
+  id: string;
+  title: string;
+  /** Who made it: a channel, YouTube Music, a label. */
+  author: string;
+  /** YouTube Music's own line under the title, in the request's language: "Spotify • 1.2M views". */
+  info: string;
+  thumb: string;
+  art: string;
+}
+
+/** A YouTube playlist opened: shaped like an album page so the same view shows both. */
+export type PlaylistPage = AlbumPage;
 
 export const GENRE_ID = /^[\w-]{8,120}={0,2}$/;
 export const ARTIST_ID = /^UC[\w-]{22}$/;
@@ -75,6 +92,8 @@ const MAX_ARTISTS = 600;
 const PLAYLISTS_PER_ROUND = 4;
 const MAX_GENRE_TRACKS = 150;
 const MAX_HITS = 50;
+/** Long playlists stop there: more than anyone downloads in one go, and each 100 songs is another request. */
+const MAX_PLAYLIST_TRACKS = 500;
 
 /** Time-boxed memo: these pages change slowly, and going back and forth between them should be instant. */
 function cached<T>(ttl: number, load: (key: string) => Promise<T>): (key: string) => Promise<T> {
@@ -399,3 +418,72 @@ export async function searchAlbums(query: string, lang: Lang): Promise<AlbumCard
   const result: any = await withClient((yt) => yt.music.search(query, { type: "album" }), lang);
   return albumCards(itemsOf(result.contents?.[0]));
 }
+
+/** "VLPL…" (as YouTube Music links to it) → "PL…"; anything else that isn't a playlist → "". */
+const playlistId = (raw: unknown): string => {
+  const id = typeof raw === "string" ? raw.replace(/^VL/, "") : "";
+  return PLAYLIST_ID.test(id) ? id : "";
+};
+
+export async function searchPlaylists(query: string, lang: Lang): Promise<PlaylistCard[]> {
+  const result: any = await withClient((yt) => yt.music.search(query, { type: "playlist" }), lang);
+  const seen = new Set<string>();
+  const cards: PlaylistCard[] = [];
+  for (const shelf of Array.isArray(result.contents) ? result.contents : []) {
+    for (const item of itemsOf(shelf)) {
+      const id = playlistId(item?.id ?? item?.endpoint?.payload?.browseId);
+      const title = text(item?.title);
+      if (!id || !title || seen.has(id)) continue;
+      seen.add(id);
+      const info = text(item?.flex_columns?.[1]?.title ?? item?.subtitle);
+      cards.push({ id, title, author: text(item?.author?.name) || info.split(" • ")[0] || "", info, ...imagesOf(item) });
+    }
+  }
+  return cards;
+}
+
+/** A playlist's songs in order, every page of it (up to MAX_PLAYLIST_TRACKS). */
+const playlistPage = cached(30 * MINUTE, async (key): Promise<PlaylistPage> => {
+  const { lang, id } = parseKey(key);
+  const { header, items } = await withClient(async (yt) => {
+    let list: any = await yt.music.getPlaylist(id);
+    const header = list.header;
+    const items: any[] = [...(list.items ?? [])];
+    while (list.has_continuation && items.length < MAX_PLAYLIST_TRACKS) {
+      list = await list.getContinuation();
+      const more: any[] = [...(list.items ?? [])];
+      if (!more.length) break;
+      items.push(...more);
+    }
+    return { header, items };
+  }, lang).catch(() => {
+    throw new HttpError(502, msg("playlistUnavailable"));
+  });
+  // The editable header (your own playlists) wraps the usual one.
+  const h: any = header?.header ?? header;
+  const title = text(h?.title);
+  const authorRuns: any[] = h?.strapline_text_one?.runs ?? [];
+  const author = text(h?.strapline_text_one) || text(h?.author?.name);
+  const artistId: string | null =
+    [h?.author?.channel_id, ...authorRuns.map((r) => r?.endpoint?.payload?.browseId)].find((b) => ARTIST_ID.test(b ?? "")) ?? null;
+  const seen = new Set<string>();
+  const tracks = items
+    .map((i) => toTrack(i, "song"))
+    .filter((t): t is Track => !!t && !seen.has(t.id) && !!seen.add(t.id))
+    .slice(0, MAX_PLAYLIST_TRACKS);
+  if (!title && !tracks.length) throw new HttpError(404, msg("playlistNotFound"));
+  const cover = imagesOf(h);
+  return {
+    id,
+    title,
+    artist: author,
+    artistId,
+    kind: text(h?.subtitle),
+    info: text(h?.second_subtitle),
+    thumb: cover.thumb || tracks[0]?.thumb || "",
+    art: cover.art || tracks[0]?.art || "",
+    tracks,
+  };
+});
+
+export const playlist = (id: string, lang: Lang) => playlistPage(keyOf(lang, id));

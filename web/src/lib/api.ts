@@ -14,7 +14,7 @@ import {
   type Updater,
 } from "./apiTypes";
 import { desktop } from "./desktop";
-import type { AlbumCard, AlbumPage, ArtistPage, DownloadsInfo, Genre, GenreArtist, GenrePage, Library, Playlist, Track } from "./types";
+import type { AlbumCard, AlbumPage, ArtistPage, DownloadsInfo, Genre, GenreArtist, GenrePage, Library, Playlist, PlaylistCard, Track } from "./types";
 
 // The HTTP backend: the Musike server (web app, desktop app). The Android build swaps this module for native/api.ts.
 export * from "./apiTypes";
@@ -53,6 +53,9 @@ export const api: MusikeApi = {
   album: (id: string, signal?: AbortSignal) => request<AlbumPage>(`/api/albums/${encodeURIComponent(id)}`, { signal }),
   searchAlbums: (q: string, signal?: AbortSignal) =>
     request<{ albums: AlbumCard[] }>(`/api/search/albums?q=${encodeURIComponent(q)}`, { signal }).then((r) => r.albums),
+  youtubePlaylist: (id: string, signal?: AbortSignal) => request<AlbumPage>(`/api/youtube-playlists/${encodeURIComponent(id)}`, { signal }),
+  searchPlaylists: (q: string, signal?: AbortSignal) =>
+    request<{ playlists: PlaylistCard[] }>(`/api/search/playlists?q=${encodeURIComponent(q)}`, { signal }).then((r) => r.playlists),
   /** The music video matching a song, or null when YouTube has none. */
   videoFor: (t: Track) =>
     request<{ track: Track | null }>(

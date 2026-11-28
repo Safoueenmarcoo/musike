@@ -111,6 +111,7 @@ Musike started from the idea behind the old Discord music bots: a server that fe
 ## Offline downloads
 
 - **Download** a song from its row or its menu, a playlist or your Favorites with the button next to Shuffle, an album from its page, or any selection of tracks from the bar above a list.
+- **Playlists from YouTube:** search, open the **Playlists** tab, and tap the download button on a playlist's cover (or **Download** on its page). It's saved to your library as a playlist (up to 500 songs) and kept downloaded, so it shows up on your other devices too.
 - A **downloaded playlist** (or Favorites) stays downloaded: songs added to it later download by themselves, songs taken out of it are removed. Tap its button again to stop.
 - Downloaded songs carry a mark and play from the device: at once, and with no internet. **Library > Downloads** lists them with the space they take; removing one is in its menu, removing them all in **Settings > Downloads**.
 - **With no connection** the app says so, dims what isn't downloaded and skips it in the queue. The covers of downloaded songs are saved too, so the library keeps its artwork.
@@ -431,6 +432,8 @@ Every route answers JSON. Errors look like `{ "error": "message", "code"?: "tool
 |---|---|---|
 | `GET` | `/api/search?q=&type=song\|video` | Search YouTube Music |
 | `GET` | `/api/search/albums?q=` | Search albums |
+| `GET` | `/api/search/playlists?q=` | Search YouTube playlists |
+| `GET` | `/api/youtube-playlists/:plid` | A YouTube playlist's songs in order (up to 500) |
 | `GET` | `/api/suggest?q=` | Search suggestions |
 | `GET` | `/api/radio/:id` | Related tracks (radio) |
 | `GET` | `/api/genres` | YouTube Music genres |

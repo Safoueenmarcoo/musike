@@ -9,7 +9,10 @@ import {
   genre as genrePage,
   genreArtists,
   genres,
+  playlist as playlistPage,
+  PLAYLIST_ID,
   searchAlbums,
+  searchPlaylists,
 } from "../../../server/src/browse";
 import * as downloads from "../../../server/src/downloads";
 import { msg, tr, type MsgKey } from "../../../server/src/i18n";
@@ -119,6 +122,12 @@ export const api: MusikeApi = {
       return albumPage(id, getLang());
     }, signal),
   searchAlbums: (q, signal) => call(() => searchAlbums(q.trim().slice(0, 200), getLang()), signal),
+  youtubePlaylist: (id, signal) =>
+    call(async () => {
+      if (!PLAYLIST_ID.test(id)) throw fail(400, "invalidPlaylist");
+      return playlistPage(id, getLang());
+    }, signal),
+  searchPlaylists: (q, signal) => call(() => searchPlaylists(q.trim().slice(0, 200), getLang()), signal),
   videoFor: (t) => call(() => findVideoFor(t.id, t.title, t.artist, t.duration)),
   prepare: (id, signal) =>
     call(async () => {

@@ -2,7 +2,7 @@ import { createReadStream, existsSync } from "node:fs";
 import { createServer } from "node:net";
 import fastifyStatic from "@fastify/static";
 import Fastify from "fastify";
-import { ALBUM_ID, album, ARTIST_ID, artist, GENRE_ID, genre, genreArtists, genres, searchAlbums } from "./browse.js";
+import { ALBUM_ID, album, ARTIST_ID, artist, GENRE_ID, genre, genreArtists, genres, PLAYLIST_ID, playlist, searchAlbums, searchPlaylists } from "./browse.js";
 import { config } from "./config.js";
 import * as downloads from "./downloads.js";
 import { downloadPath, fileDownloads } from "./downloadsFile.js";
@@ -122,6 +122,18 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
   app.get("/api/search/albums", async (req) => {
     const { q } = req.query as { q?: string };
     return { albums: await searchAlbums(query(q), langOf(req)) };
+  });
+
+  /** A YouTube playlist (not one of the library's: those live under /api/playlists). */
+  app.get("/api/youtube-playlists/:plid", async (req) => {
+    const { plid } = req.params as { plid: string };
+    if (!PLAYLIST_ID.test(plid)) throw new HttpError(400, msg("invalidPlaylist"));
+    return playlist(plid, langOf(req));
+  });
+
+  app.get("/api/search/playlists", async (req) => {
+    const { q } = req.query as { q?: string };
+    return { playlists: await searchPlaylists(query(q), langOf(req)) };
   });
 
   /** The music video for a song, so "Vídeo" mode can show the clip instead of a still cover. */

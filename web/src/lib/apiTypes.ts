@@ -1,4 +1,4 @@
-import type { AlbumCard, AlbumPage, ArtistPage, DownloadsInfo, Genre, GenreArtist, GenrePage, Library, Playlist, Track } from "./types";
+import type { AlbumCard, AlbumPage, ArtistPage, DownloadsInfo, Genre, GenreArtist, GenrePage, Library, Playlist, PlaylistCard, Track } from "./types";
 
 /**
  * What the app needs from a backend. The web app and the desktop app talk to the Musike server over HTTP
@@ -116,6 +116,9 @@ export interface MusikeApi {
   artist(id: string, signal?: AbortSignal): Promise<ArtistPage>;
   album(id: string, signal?: AbortSignal): Promise<AlbumPage>;
   searchAlbums(q: string, signal?: AbortSignal): Promise<AlbumCard[]>;
+  /** A YouTube playlist's songs, shaped like an album page. */
+  youtubePlaylist(id: string, signal?: AbortSignal): Promise<AlbumPage>;
+  searchPlaylists(q: string, signal?: AbortSignal): Promise<PlaylistCard[]>;
   /** The music video matching a song, or null when YouTube has none. */
   videoFor(t: Track): Promise<Track | null>;
   prepare(id: string, signal?: AbortSignal): Promise<Prepared>;

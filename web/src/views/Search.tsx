@@ -11,7 +11,7 @@ import {
 } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router";
-import { AlbumGrid } from "../components/AlbumTiles";
+import { AlbumGrid, PlaylistGrid } from "../components/AlbumTiles";
 import { Artwork } from "../components/Artwork";
 import { GenrePanel } from "../components/GenrePanel";
 import { EmptyState, PageHeader } from "../components/Page";
@@ -21,7 +21,7 @@ import { api } from "../lib/api";
 import { useT } from "../i18n";
 import { cn } from "../lib/format";
 import { paths } from "../lib/routes";
-import type { AlbumCard, Track } from "../lib/types";
+import type { AlbumCard, PlaylistCard, Track } from "../lib/types";
 import { usePlayer } from "../player/player";
 import { parseList } from "./BatchSearch";
 
@@ -55,8 +55,8 @@ function videoIdFromUrl(text: string): string | null {
   }
 }
 
-type Kind = "song" | "video" | "album";
-const KIND_PARAM: Record<Kind, string | null> = { song: null, video: "videos", album: "albums" };
+type Kind = "song" | "video" | "album" | "playlist";
+const KIND_PARAM: Record<Kind, string | null> = { song: null, video: "videos", album: "albums", playlist: "playlists" };
 
 // The genre panel stays open when coming back from a genre page.
 let genresOpenMemo = false;
@@ -64,11 +64,13 @@ let genresOpenMemo = false;
 export default function Search() {
   const [params, setParams] = useSearchParams();
   const q = params.get("q") ?? "";
-  const kind: Kind = params.get("type") === "videos" ? "video" : params.get("type") === "albums" ? "album" : "song";
+  const type = params.get("type");
+  const kind: Kind = type === "videos" ? "video" : type === "albums" ? "album" : type === "playlists" ? "playlist" : "song";
   const t = useT();
   const [text, setText] = useState(q);
   const [results, setResults] = useState<Track[] | null>(null);
   const [albums, setAlbums] = useState<AlbumCard[] | null>(null);
+  const [playlists, setPlaylists] = useState<PlaylistCard[] | null>(null);
   const [state, setState] = useState<"idle" | "loading" | "ok" | "error">("idle");
   const [error, setError] = useState("");
   const [suggestions, setSuggestions] = useState<string[]>([]);
@@ -111,6 +113,7 @@ export default function Search() {
     if (!q) {
       setResults(null);
       setAlbums(null);
+      setPlaylists(null);
       setState("idle");
       return;
     }
@@ -118,8 +121,10 @@ export default function Search() {
     setState("loading");
     const found: Promise<number> =
       kind === "album"
-        ? api.searchAlbums(q, ctrl.signal).then((list) => (setAlbums(list), setResults(null), list.length))
-        : api.search(q, kind, ctrl.signal).then((list) => (setResults(list), setAlbums(null), list.length));
+        ? api.searchAlbums(q, ctrl.signal).then((list) => (setAlbums(list), setResults(null), setPlaylists(null), list.length))
+        : kind === "playlist"
+          ? api.searchPlaylists(q, ctrl.signal).then((list) => (setPlaylists(list), setResults(null), setAlbums(null), list.length))
+          : api.search(q, kind, ctrl.signal).then((list) => (setResults(list), setAlbums(null), setPlaylists(null), list.length));
     found
       .then(() => {
         setState("ok");
@@ -183,7 +188,7 @@ export default function Search() {
       aria-selected={kind === k}
       onClick={() => setQuery(text || q, k)}
       className={cn(
-        "h-9 rounded-full px-4 text-sm font-medium transition-colors duration-200",
+        "h-9 shrink-0 rounded-full px-4 text-sm font-medium transition-colors duration-200",
         kind === k ? "bg-fg text-bg" : "bg-surface-3 text-fg-2 hover:text-fg",
       )}
     >
@@ -275,10 +280,11 @@ export default function Search() {
 
         {!linkId && (
           <div className="flex flex-wrap items-center gap-2">
-            <div role="tablist" aria-label={t.search.resultType} className="flex gap-2">
+            <div role="tablist" aria-label={t.search.resultType} className="no-scrollbar -mx-1 flex max-w-full gap-2 overflow-x-auto px-1">
               {tab("song", t.search.songs)}
               {tab("video", t.search.videos)}
               {tab("album", t.search.albums)}
+              {tab("playlist", t.search.playlists)}
             </div>
             <span className="flex-1" />
             <div className="flex items-center gap-1">
@@ -358,6 +364,12 @@ export default function Search() {
 
         {!linkId && state === "ok" && albums && (albums.length ? (
           <AlbumGrid albums={albums} />
+        ) : (
+          <EmptyState icon={<MagnifyingGlassIcon size={28} />} title={t.search.nothingFound} body={t.search.nothingFoundBody(q, t.search.songs)} />
+        ))}
+
+        {!linkId && state === "ok" && playlists && (playlists.length ? (
+          <PlaylistGrid playlists={playlists} />
         ) : (
           <EmptyState icon={<MagnifyingGlassIcon size={28} />} title={t.search.nothingFound} body={t.search.nothingFoundBody(q, t.search.songs)} />
         ))}
